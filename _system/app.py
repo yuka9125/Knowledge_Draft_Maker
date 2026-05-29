@@ -434,6 +434,38 @@ def display_results():
                 )
 
     st.divider()
+    st.subheader("承認済みKnowledge出力")
+    reviewed_excel = st.file_uploader(
+        "レビュー結果を入力した FAQ_final_result.xlsx",
+        type=["xlsx"],
+        key="reviewed_excel_for_approved_knowledge",
+        help="Sheet1のレビュー結果が「採用」の行だけ approved_knowledge.json に出力します",
+    )
+    if reviewed_excel is not None:
+        try:
+            from approved_knowledge_exporter import (
+                export_approved_knowledge_from_excel,
+                load_approved_knowledge_from_excel,
+            )
+
+            approved_items = load_approved_knowledge_from_excel(reviewed_excel)
+            reviewed_excel.seek(0)
+            approved_path = os.path.join(output_dir, "approved_knowledge.json")
+            export_approved_knowledge_from_excel(reviewed_excel, approved_path)
+
+            st.success(f"承認済みKnowledge: {len(approved_items)}件")
+            with open(approved_path, "rb") as f:
+                st.download_button(
+                    label="approved_knowledge.json",
+                    data=f.read(),
+                    file_name="approved_knowledge.json",
+                    mime="application/json",
+                    type="primary",
+                )
+        except Exception as e:
+            st.error(f"approved_knowledge.json の出力に失敗しました: {e}")
+
+    st.divider()
 
     # 新しい処理を開始するボタン
     if st.button("🔄 新しい処理を開始", type="primary"):

@@ -84,6 +84,7 @@ Embeddingバッチサイズ   | 100       | 一度にEmbedding処理する件数
 FAQ_final_result_*.xlsx          | 最終結果Excel（2シート構成）
 deduplicated_questions_*.csv     | 最終ナレッジ候補一覧（CSV形式）
 deduplicated_questions_*.json    | 最終ナレッジ候補一覧（JSON形式）
+approved_knowledge.json          | レビュー結果が「採用」の承認済みKnowledge
 phase1_cleaned.csv               | 中間ファイル: Phase 1クレンジング後
 --------------------------------------------------------------------------------
 
@@ -104,6 +105,20 @@ phase1_cleaned.csv               | 中間ファイル: Phase 1クレンジング
   - 各Phaseでの類似度（P0、P2、P3-1、P3-2）
   - 最終結果
   - 入力データ（問い合わせ内容、回答内容）と生成データ（質問、回答）
+
+
+approved_knowledge.json の出力
+--------------------------------------------------------------------------------
+レビュー後の FAQ_final_result.xlsx を使い、シート1の「レビュー結果」が「採用」の行だけを
+approved_knowledge.json に出力できます。
+
+Streamlit の「承認済みKnowledge出力」からレビュー済みExcelをアップロードするか、
+以下のコマンドを実行してください。
+
+  python approved_knowledge_exporter.py FAQ_final_result.xlsx -o data/outputs/approved_knowledge.json
+
+出力形式:
+  knowledge_id, question, answer, category, approved_status, approved_at
 
 
 最終結果ステータスの意味
