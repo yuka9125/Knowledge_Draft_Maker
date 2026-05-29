@@ -434,38 +434,6 @@ def display_results():
                 )
 
     st.divider()
-    st.subheader("承認済みKnowledge出力")
-    reviewed_excel = st.file_uploader(
-        "レビュー結果を入力した FAQ_final_result.xlsx",
-        type=["xlsx"],
-        key="reviewed_excel_for_approved_knowledge",
-        help="Sheet1のレビュー結果が「採用」の行だけ approved_knowledge.json に出力します",
-    )
-    if reviewed_excel is not None:
-        try:
-            from approved_knowledge_exporter import (
-                export_approved_knowledge_from_excel,
-                load_approved_knowledge_from_excel,
-            )
-
-            approved_items = load_approved_knowledge_from_excel(reviewed_excel)
-            reviewed_excel.seek(0)
-            approved_path = os.path.join(output_dir, "approved_knowledge.json")
-            export_approved_knowledge_from_excel(reviewed_excel, approved_path)
-
-            st.success(f"承認済みKnowledge: {len(approved_items)}件")
-            with open(approved_path, "rb") as f:
-                st.download_button(
-                    label="approved_knowledge.json",
-                    data=f.read(),
-                    file_name="approved_knowledge.json",
-                    mime="application/json",
-                    type="primary",
-                )
-        except Exception as e:
-            st.error(f"approved_knowledge.json の出力に失敗しました: {e}")
-
-    st.divider()
 
     # 新しい処理を開始するボタン
     if st.button("🔄 新しい処理を開始", type="primary"):
@@ -481,12 +449,87 @@ def display_results():
         st.rerun()
 
 
+def display_approved_knowledge_exporter():
+    """承認済みKnowledge出力専用画面を表示する。"""
+    st.header("承認済みKnowledge出力")
+    st.caption(
+        "レビュー済みの FAQ_final_result.xlsx をアップロードすると、"
+        "レビュー結果が「採用」の行だけ approved_knowledge.json に出力します。"
+    )
+
+    reviewed_excel = st.file_uploader(
+        "レビュー結果を入力した FAQ_final_result.xlsx",
+        type=["xlsx"],
+        key="reviewed_excel_for_approved_knowledge",
+        help="Sheet1のレビュー結果が「採用」の行だけ approved_knowledge.json に出力します",
+    )
+    if reviewed_excel is not None:
+        try:
+            from approved_knowledge_exporter import (
+                export_approved_knowledge_from_excel,
+                load_approved_knowledge_from_excel,
+            )
+
+            approved_items = load_approved_knowledge_from_excel(reviewed_excel)
+            reviewed_excel.seek(0)
+            output_dir = "data/outputs"
+            approved_path = os.path.join(output_dir, "approved_knowledge.json")
+            export_approved_knowledge_from_excel(reviewed_excel, approved_path)
+
+            st.success(f"承認済みKnowledge: {len(approved_items)}件")
+            with open(approved_path, "rb") as f:
+                st.download_button(
+                    label="approved_knowledge.json",
+                    data=f.read(),
+                    file_name="approved_knowledge.json",
+                    mime="application/json",
+                    type="primary",
+                )
+        except Exception as e:
+            st.error(f"approved_knowledge.json の出力に失敗しました: {e}")
+
+
 # ================================================================================
 # メインUI
 # ================================================================================
 
 st.title("📋 FAQ自動生成システム")
 st.markdown("問い合わせデータからFAQナレッジを自動生成")
+
+if "current_view" not in st.session_state:
+    st.session_state["current_view"] = "faq_generation"
+
+nav_col1, nav_col2 = st.columns(2)
+with nav_col1:
+    if st.button(
+        "FAQ生成",
+        type=(
+            "primary"
+            if st.session_state["current_view"] == "faq_generation"
+            else "secondary"
+        ),
+        use_container_width=True,
+    ):
+        st.session_state["current_view"] = "faq_generation"
+        st.rerun()
+with nav_col2:
+    if st.button(
+        "承認済みKnowledge出力",
+        type=(
+            "primary"
+            if st.session_state["current_view"] == "approved_export"
+            else "secondary"
+        ),
+        use_container_width=True,
+    ):
+        st.session_state["current_view"] = "approved_export"
+        st.rerun()
+
+st.divider()
+
+if st.session_state["current_view"] == "approved_export":
+    display_approved_knowledge_exporter()
+    st.stop()
 
 # 環境変数チェック
 env_ok, missing_vars = check_environment()
