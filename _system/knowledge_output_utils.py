@@ -140,12 +140,12 @@ def _answer_clarity_label(answer: str) -> str:
     """回答の明確さを短く評価する。"""
     text = normalize_text_for_conflict(answer)
     if not text or text == "-":
-        return "回答が空またはFAQ対象外のため明確さを確認できません"
+        return "回答が空または対象外"
     if len(text) >= 80:
-        return "回答は手順や補足を含み比較的具体的です"
+        return "回答は具体的"
     if len(text) >= 35:
-        return "回答は要点を含みますが補足確認の余地があります"
-    return "回答が短いため、公開前に補足不足がないか確認が必要です"
+        return "回答は要点あり"
+    return "回答が短く補足確認が必要"
 
 
 def _risk_reason(risk_level: str, answer: str, category: str) -> str:
@@ -165,28 +165,28 @@ def _risk_reason(risk_level: str, answer: str, category: str) -> str:
         return (
             f"リスクレベル{risk_level}。"
             f"{'・'.join(found_critical) or '認証・権限系'}に関係し、"
-            "誤案内時に権限管理やアクセス制御へ大きな影響が出る可能性があります。"
+            "権限管理への影響が大きいため。"
         )
     if risk_level == "high":
         return (
             f"リスクレベル{risk_level}。"
             f"{'・'.join(found_high) or '人事・セキュリティ系'}に関係し、"
-            "誤案内時に個人情報、承認フロー、または業務運用へ影響する可能性があります。"
+            "個人情報や運用へ影響し得るため。"
         )
     if found_accounting:
         return (
             f"リスクレベル{risk_level}。"
-            f"{'・'.join(found_accounting)}に関係しますが、権限や個人情報に直結する語は少なく、"
-            "誤案内時の主な影響は会計・承認フロー上の手戻りです。"
+            f"{'・'.join(found_accounting)}に関係し、"
+            "会計・承認フローの手戻りが起き得るため。"
         )
     if found_operation:
         return (
             f"リスクレベル{risk_level}。"
-            f"{'・'.join(found_operation)}に関係しますが、権限・会計・個人情報への直接影響は限定的です。"
+            f"{'・'.join(found_operation)}に関係するが、直接影響は限定的なため。"
         )
     return (
         f"リスクレベル{risk_level}。"
-        "権限・会計・承認フローへの直接影響を示す語が少なく、誤案内時の影響は限定的です。"
+        "権限・会計・承認フローへの直接影響が小さいため。"
     )
 
 
@@ -202,15 +202,15 @@ def build_judgement_reason(
     """Sheet1向けに信頼度理由とリスク理由を2行形式で返す。"""
     clarity = _answer_clarity_label(answer)
     if final_result.startswith("P3-2確認"):
-        pending = "既存FAQとの統合・更新要否は未確認です"
+        pending = "FAQ更新要否は未確認"
     elif final_result == "◯採用":
-        pending = "類似する既存FAQがない前提ですが、公開前確認は未実施です"
+        pending = "公開前確認は未実施"
     else:
-        pending = "レビュー結果は未確認です"
+        pending = "レビュー未確認"
 
     confidence_reason = (
-        f"信頼度理由: 信頼度{confidence:.2f}。"
-        f"元ログ{similar_logs_count}件から統合され、{faq_comparison}。"
+        f"信頼度理由: {confidence:.2f}。"
+        f"元ログ{similar_logs_count}件、{faq_comparison}。"
         f"{clarity}。{pending}。"
     )
     risk_reason = f"リスク理由: {_risk_reason(risk_level, answer, category)}"

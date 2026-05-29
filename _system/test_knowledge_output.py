@@ -120,7 +120,7 @@ class KnowledgeOutputLogicTest(unittest.TestCase):
             final_result="P3-2確認（既存FAQ更新候補）",
         )
         self.assertIn(
-            "信頼度理由: 信頼度0.91",
+            "信頼度理由: 0.91",
             reason,
         )
         self.assertIn(

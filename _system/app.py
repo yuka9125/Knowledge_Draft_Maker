@@ -317,7 +317,7 @@ def read_csv_flexible(file_or_path, **kwargs):
 # 結果表示関数
 # ================================================================================
 def summarize_review_targets(records):
-    """Sheet1レビュー対象件数と既存FAQほぼ一致の除外件数を集計する。"""
+    """ナレッジ候補数と既存FAQほぼ一致の除外件数を集計する。"""
     review_target_count = 0
     exact_faq_count = 0
     for record in records.values():
@@ -360,7 +360,7 @@ def display_results():
         col3.metric("FAQ候補", f"{summary.get('after_p1', 0)}件")
         col4, col5, col6 = st.columns(3)
         col4.metric("Phase 2後", f"{summary.get('after_p2', 0)}件")
-        col5.metric("Sheet1レビュー対象", f"{summary.get('final', 0)}件")
+        col5.metric("ナレッジ候補数", f"{summary.get('final', 0)}件")
         col6.metric("FAQほぼ一致除外", f"{summary.get('exact_faq', 0)}件")
 
         review_target_rate = (
@@ -368,7 +368,7 @@ def display_results():
         )
         st.progress(
             min(review_target_rate / 100, 1.0),
-            text=f"Sheet1レビュー対象率: {review_target_rate:.1f}%",
+            text=f"ナレッジ候補率: {review_target_rate:.1f}%",
         )
 
         # API節約率も表示
@@ -841,7 +841,7 @@ if snow_df is None:
             st.markdown(
                 """
 **全データ処理履歴シート**の「最終結果」カラムで確認できます：
-- `◯採用`: Sheet1レビュー対象として出力される
+- `◯採用`: ナレッジ候補として出力される
 - `P0削除（完全一致）`: Phase 0で削除（問い合わせ内容が完全一致）
 - `P0削除（類似）`: Phase 0で削除（問い合わせ内容の類似度0.9以上）
 - `P0削除（短文）`: Phase 0で削除（回答内容が30文字以内）
@@ -849,7 +849,7 @@ if snow_df is None:
 - `P2削除（類似）`: Phase 2で削除（質問の類似度が閾値以上）
 - `P3-1削除`: Phase 3-1で削除（Embedding類似度）
 - `P3-2確認（既存FAQ完全一致）`: 既存FAQとほぼ一致するためSheet1には出さない
-- `P3-2確認（既存FAQ類似/更新候補/矛盾可能性）`: Sheet1レビュー対象として出力される
+- `P3-2確認（既存FAQ類似/更新候補/矛盾可能性）`: ナレッジ候補として出力される
 - `FAQ対象外`: AIがナレッジ候補に適さないと判断
         """
             )
@@ -1042,7 +1042,7 @@ else:
                 )
                 st.write(
                     "  ✅ 完了: "
-                    f"{after_p2}件 → Sheet1レビュー対象 {review_target_count}件"
+                    f"{after_p2}件 → ナレッジ候補数 {review_target_count}件"
                     f"（FAQほぼ一致除外 {exact_faq_count}件）"
                 )
 
