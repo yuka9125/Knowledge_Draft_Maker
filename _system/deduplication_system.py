@@ -31,6 +31,7 @@ from scipy.cluster.hierarchy import linkage, fcluster
 from scipy.spatial.distance import squareform
 from knowledge_output_utils import (
     build_judgement_reason,
+    build_existing_faq_comparison_label,
     build_existing_faq_diff_reason,
     build_recommended_action,
     classify_p32_result,
@@ -132,6 +133,27 @@ def safe_get_confidence(row, col_name="信頼度"):
         return float(val)
     except (ValueError, TypeError):
         return 0.0
+
+
+def extract_faq_id(faq_row, fallback_row_number: Optional[int] = None) -> str:
+    """既存FAQ行からID候補を取得する。無ければExcel行番号で補完する。"""
+    if faq_row is not None:
+        for col_name in [
+            "FAQ_ID",
+            "faq_id",
+            "FAQID",
+            "id",
+            "ID",
+            "ナレッジID",
+            "knowledge_id",
+        ]:
+            if col_name in faq_row.index:
+                value = faq_row.get(col_name)
+                if not pd.isna(value) and str(value).strip():
+                    return str(value).strip()
+    if fallback_row_number is not None:
+        return f"FAQ行:{fallback_row_number}"
+    return ""
 
 
 # ================================================================================
@@ -740,6 +762,10 @@ class Phase32Deduplicator:
                             self.faq_df.iloc[max_faq_idx]["回答"]
                         )
                         record.matched_faq_row = max_faq_idx + 2
+                        record.matched_faq_id = extract_faq_id(
+                            self.faq_df.iloc[max_faq_idx],
+                            record.matched_faq_row,
+                        )
 
                 # 採用判定更新
                 if max_faq_similarity >= self.threshold:
@@ -1059,6 +1085,10 @@ class Phase3Processor:
                     if record is not None and record.p3_2_similarity is not None
                     else None
                 )
+                existing_faq_comparison = build_existing_faq_comparison_label(
+                    max_similarity=max_similarity,
+                    faq_checked=self.faq_checked,
+                )
                 existing_faq_diff_reason = build_existing_faq_diff_reason(
                     max_similarity=max_similarity,
                     threshold=self.threshold_faq,
@@ -1092,12 +1122,24 @@ class Phase3Processor:
                         "matched_faq_answer": (
                             record.matched_faq_answer if record is not None else ""
                         ),
+                        "matched_faq_id": (
+                            record.matched_faq_id if record is not None else ""
+                        ),
                         "matched_faq_similarity": max_similarity,
+                        "existing_faq_comparison": existing_faq_comparison,
                         "final_result": final_result,
                         "recommended_action": build_recommended_action(
                             final_result
                         ),
-                        "judgement_reason": build_judgement_reason(final_result),
+                        "judgement_reason": build_judgement_reason(
+                            confidence=confidence,
+                            similar_logs_count=len(member_indices),
+                            faq_comparison=existing_faq_comparison,
+                            answer=answer,
+                            category=category,
+                            risk_level=risk_level,
+                            final_result=final_result,
+                        ),
                         "risk_level": risk_level,
                         "review_status": "draft",
                         "confidence": confidence,
@@ -1159,9 +1201,11 @@ class Phase3Processor:
             "category",
             "source_logs",
             "similar_logs_count",
+            "matched_faq_id",
             "matched_faq_question",
             "matched_faq_answer",
             "matched_faq_similarity",
+            "existing_faq_comparison",
             "final_result",
             "recommended_action",
             "judgement_reason",

@@ -111,16 +111,101 @@ def build_recommended_action(final_result: str) -> str:
     return ""
 
 
-def build_judgement_reason(final_result: str) -> str:
-    """最終結果からSheet1向けの判定根拠を返す。"""
-    reason_by_result = {
-        "◯採用": "類似する既存FAQが見つからないため、新規FAQ候補として採用。",
-        "P3-2確認（既存FAQ完全一致）": "既存FAQと質問・回答がほぼ一致しているため、既存FAQ維持候補として確認。",
-        "P3-2確認（既存FAQ類似）": "既存FAQと同一テーマだが、表現や補足情報に差分があるため、統合候補として確認。",
-        "P3-2確認（既存FAQ更新候補）": "既存FAQと同一テーマだが、回答内容に差分があるため、更新候補として確認。",
-        "P3-2確認（既存FAQ矛盾可能性）": "既存FAQと新規候補で案内内容が異なるため、現行運用の確認が必要。",
-    }
-    return reason_by_result.get(final_result, "")
+def build_existing_faq_comparison_label(
+    max_similarity: float | None,
+    faq_checked: bool,
+) -> str:
+    """既存FAQとの近さをレビュー向けの説明文で返す。"""
+    if not faq_checked or max_similarity is None:
+        return "既存FAQなし/未照合"
+    if max_similarity >= 0.95:
+        return "既存FAQと内容が近い"
+    if max_similarity >= 0.85:
+        return "既存FAQと内容が近い（一部差分あり）"
+    if max_similarity >= 0.75:
+        return "既存FAQと内容が一部異なる"
+    return "既存FAQと内容が異なる"
+
+
+def _answer_clarity_label(answer: str) -> str:
+    """回答の明確さを短く評価する。"""
+    text = normalize_text_for_conflict(answer)
+    if not text or text == "-":
+        return "回答が空またはFAQ対象外のため明確さを確認できません"
+    if len(text) >= 80:
+        return "回答は手順や補足を含み比較的具体的です"
+    if len(text) >= 35:
+        return "回答は要点を含みますが補足確認の余地があります"
+    return "回答が短いため、公開前に補足不足がないか確認が必要です"
+
+
+def _risk_reason(risk_level: str, answer: str, category: str) -> str:
+    """リスクレベルの理由を説明する。"""
+    target_text = f"{answer} {category}"
+    critical_keywords = ["認証", "権限", "管理者"]
+    high_keywords = ["人事", "給与", "セキュリティ", "パスワード", "個人情報"]
+    accounting_keywords = ["会計", "経理", "請求", "支払", "精算", "承認", "申請"]
+    operation_keywords = ["運用", "手順", "システム", "ワークフロー", "workflow"]
+
+    found_critical = [kw for kw in critical_keywords if kw in target_text]
+    found_high = [kw for kw in high_keywords if kw in target_text]
+    found_accounting = [kw for kw in accounting_keywords if kw in target_text]
+    found_operation = [kw for kw in operation_keywords if kw in target_text]
+
+    if risk_level == "critical":
+        return (
+            f"リスクレベル{risk_level}。"
+            f"{'・'.join(found_critical) or '認証・権限系'}に関係し、"
+            "誤案内時に権限管理やアクセス制御へ大きな影響が出る可能性があります。"
+        )
+    if risk_level == "high":
+        return (
+            f"リスクレベル{risk_level}。"
+            f"{'・'.join(found_high) or '人事・セキュリティ系'}に関係し、"
+            "誤案内時に個人情報、承認フロー、または業務運用へ影響する可能性があります。"
+        )
+    if found_accounting:
+        return (
+            f"リスクレベル{risk_level}。"
+            f"{'・'.join(found_accounting)}に関係しますが、権限や個人情報に直結する語は少なく、"
+            "誤案内時の主な影響は会計・承認フロー上の手戻りです。"
+        )
+    if found_operation:
+        return (
+            f"リスクレベル{risk_level}。"
+            f"{'・'.join(found_operation)}に関係しますが、権限・会計・個人情報への直接影響は限定的です。"
+        )
+    return (
+        f"リスクレベル{risk_level}。"
+        "権限・会計・承認フローへの直接影響を示す語が少なく、誤案内時の影響は限定的です。"
+    )
+
+
+def build_judgement_reason(
+    confidence: float,
+    similar_logs_count: int,
+    faq_comparison: str,
+    answer: str,
+    category: str,
+    risk_level: str,
+    final_result: str,
+) -> str:
+    """Sheet1向けに信頼度理由とリスク理由を2行形式で返す。"""
+    clarity = _answer_clarity_label(answer)
+    if final_result.startswith("P3-2確認"):
+        pending = "既存FAQとの統合・更新要否は未確認です"
+    elif final_result == "◯採用":
+        pending = "類似する既存FAQがない前提ですが、公開前確認は未実施です"
+    else:
+        pending = "レビュー結果は未確認です"
+
+    confidence_reason = (
+        f"信頼度理由: 信頼度{confidence:.2f}。"
+        f"元ログ{similar_logs_count}件から統合され、{faq_comparison}。"
+        f"{clarity}。{pending}。"
+    )
+    risk_reason = f"リスク理由: {_risk_reason(risk_level, answer, category)}"
+    return f"{confidence_reason}\n{risk_reason}"
 
 
 def determine_risk_level(answer: str, category: str) -> str:

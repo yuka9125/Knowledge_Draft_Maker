@@ -7,6 +7,7 @@
 import unittest
 
 from knowledge_output_utils import (
+    build_existing_faq_comparison_label,
     build_judgement_reason,
     build_existing_faq_diff_analysis,
     build_recommended_action,
@@ -108,13 +109,53 @@ class KnowledgeOutputLogicTest(unittest.TestCase):
             build_recommended_action("P3-2確認（既存FAQ矛盾可能性）"),
             "人間レビュー必須",
         )
-        self.assertIn(
-            "新規FAQ候補",
-            build_judgement_reason("◯採用"),
+        reason = build_judgement_reason(
+            confidence=0.91,
+            similar_logs_count=2,
+            faq_comparison="既存FAQと内容が一部異なる",
+            answer="最新版VPNクライアントへ更新してください。手順に沿って再接続してください。",
+            category="IT",
+            risk_level="low",
+            final_result="P3-2確認（既存FAQ更新候補）",
         )
         self.assertIn(
-            "更新候補",
-            build_judgement_reason("P3-2確認（既存FAQ更新候補）"),
+            "信頼度理由: 信頼度0.91",
+            reason,
+        )
+        self.assertIn(
+            "元ログ2件",
+            reason,
+        )
+        self.assertIn(
+            "既存FAQと内容が一部異なる",
+            reason,
+        )
+        self.assertIn(
+            "リスク理由: リスクレベルlow",
+            reason,
+        )
+
+    def test_existing_faq_comparison_label(self):
+        """既存FAQ比較は数値ではなく説明文で返す。"""
+        self.assertEqual(
+            build_existing_faq_comparison_label(0.96, True),
+            "既存FAQと内容が近い",
+        )
+        self.assertEqual(
+            build_existing_faq_comparison_label(0.88, True),
+            "既存FAQと内容が近い（一部差分あり）",
+        )
+        self.assertEqual(
+            build_existing_faq_comparison_label(0.76, True),
+            "既存FAQと内容が一部異なる",
+        )
+        self.assertEqual(
+            build_existing_faq_comparison_label(0.70, True),
+            "既存FAQと内容が異なる",
+        )
+        self.assertEqual(
+            build_existing_faq_comparison_label(None, False),
+            "既存FAQなし/未照合",
         )
 
 

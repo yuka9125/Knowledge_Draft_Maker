@@ -91,9 +91,11 @@ phase1_cleaned.csv               | 中間ファイル: Phase 1クレンジング
 最終結果Excel のシート構成
 
 ■ シート1: 最終ナレッジ候補一覧
-  採用されたナレッジ候補データの一覧
-  - knowledge_id、cluster_id、question、answer、category、source_logs、
-    similar_logs_count、existing_faq_diff_reason、risk_level、review_status、confidence
+  レビュー対象のナレッジ候補データの一覧
+  - ナレッジID、グループID、候補_質問、候補_回答、カテゴリ、統合件数
+  - 既存FAQ_ID、既存FAQ_質問、既存FAQ_回答、既存FAQ_比較
+  - リスクレベル、信頼度、推奨アクション、判定根拠、レビュー結果
+  - レビュー結果は「未確認 / 採用 / 不採用」から選択
 
 ■ シート2: 全データ処理履歴
   全問い合わせデータの処理結果を追跡
@@ -209,7 +211,7 @@ Phase 3: Embedding重複除去
   文字列が異なっていても意味が同じ質問を統合。
 
 ■ Phase 3-2（既存FAQ照合）
-  既存FAQとの類似度を計算し、重複する問い合わせを除外。
+  既存FAQとの近さを確認し、完全一致・類似・更新候補・矛盾可能性としてレビュー対象化。
 
 
 【推定APIコスト】

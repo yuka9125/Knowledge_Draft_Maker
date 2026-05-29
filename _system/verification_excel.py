@@ -141,6 +141,7 @@ class ProcessingRecord:
     answer: str = ""
     matched_faq_question: str = ""
     matched_faq_answer: str = ""
+    matched_faq_id: str = ""
     matched_faq_row: Optional[int] = None
     confidence_score: float = 0.0
 
@@ -276,9 +277,10 @@ class VerificationExcelWriter:
                 "候補_回答",
                 "カテゴリ",
                 "統合件数",
+                "既存FAQ_ID",
                 "既存FAQ_質問",
                 "既存FAQ_回答",
-                "既存FAQ_類似度",
+                "既存FAQ_比較",
                 "リスクレベル",
                 "信頼度",
                 "推奨アクション",
@@ -292,10 +294,6 @@ class VerificationExcelWriter:
 
             row_idx = 2
             for item in knowledge_candidates:
-                similarity = item.get("matched_faq_similarity")
-                similarity_value = (
-                    "" if similarity is None else f"{float(similarity):.3f}"
-                )
                 row_values = [
                     str(item.get("knowledge_id", "")),
                     str(item.get("group_id", "")),
@@ -303,9 +301,10 @@ class VerificationExcelWriter:
                     str(item.get("answer", "")),
                     str(item.get("category", "")),
                     item.get("similar_logs_count", 0),
+                    str(item.get("matched_faq_id", "")),
                     str(item.get("matched_faq_question", "")),
                     str(item.get("matched_faq_answer", "")),
-                    similarity_value,
+                    str(item.get("existing_faq_comparison", "")),
                     str(item.get("risk_level", "")),
                     item.get("confidence", 0.0),
                     str(item.get("recommended_action", "")),
@@ -319,15 +318,31 @@ class VerificationExcelWriter:
                     apply_cell_style(cell, fill=row_fill)
                 row_idx += 1
 
-            widths = [12, 10, 48, 60, 18, 12, 48, 60, 14, 12, 10, 18, 52, 16]
+            widths = [
+                12,
+                10,
+                48,
+                60,
+                18,
+                12,
+                16,
+                48,
+                60,
+                22,
+                12,
+                10,
+                18,
+                70,
+                16,
+            ]
             set_column_widths(ws, widths)
 
             # レビュー結果列は固定選択肢のみ入力可能
             if row_idx > 2:
-                review_result_col = 14  # 1始まり
+                review_result_col = 15  # 1始まり
                 dv = DataValidation(
                     type="list",
-                    formula1='"未確認,新規採用,既存FAQ維持,既存FAQ更新,却下,要確認"',
+                    formula1='"未確認,採用,不採用"',
                     allow_blank=False,
                     showErrorMessage=True,
                     errorTitle="入力値エラー",

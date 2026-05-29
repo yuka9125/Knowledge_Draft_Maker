@@ -707,7 +707,7 @@ with st.sidebar:
             max_value=0.95,
             value=0.75,
             step=0.05,
-            help="既存FAQとの類似度がこの値以上なら削除",
+            help="既存FAQとの類似度がこの値以上なら確認対象としてSheet1に出力",
         )
 
     with st.expander("⚙️ 処理設定"):
@@ -767,7 +767,7 @@ if snow_df is None:
 | Phase 1 | AIクレンジング（**代表のみ**） | GPT-4.1 |
 | Phase 2 | 完全一致＆類似度チェック（質問） | なし |
 | Phase 3-1 | Q内Embedding重複除去 | Embedding |
-| Phase 3-2 | 既存FAQとの重複除去 | Embedding |
+| Phase 3-2 | 既存FAQとの照合・確認対象化 | Embedding |
 
 ### Step 4: 結果ダウンロード
 - **FAQ_final_result.xlsx**: 2シート構成
