@@ -119,12 +119,21 @@ def build_existing_faq_comparison_label(
     if not faq_checked or max_similarity is None:
         return "既存FAQなし/未照合"
     if max_similarity >= 0.95:
-        return "既存FAQと内容が近い"
+        return "既存FAQとほぼ一致"
     if max_similarity >= 0.85:
         return "既存FAQと内容が近い（一部差分あり）"
     if max_similarity >= 0.75:
         return "既存FAQと内容が一部異なる"
     return "既存FAQと内容が異なる"
+
+
+def should_output_to_sheet1(final_result: str, faq_comparison: str) -> bool:
+    """Sheet1のレビュー対象として出力するか判定する。"""
+    if faq_comparison == "既存FAQとほぼ一致":
+        return False
+    if final_result == "P3-2確認（既存FAQ完全一致）":
+        return False
+    return final_result == "◯採用" or final_result.startswith("P3-2確認")
 
 
 def _answer_clarity_label(answer: str) -> str:

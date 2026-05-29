@@ -15,6 +15,7 @@ from knowledge_output_utils import (
     build_source_logs,
     classify_p32_result,
     determine_risk_level,
+    should_output_to_sheet1,
 )
 
 
@@ -139,7 +140,7 @@ class KnowledgeOutputLogicTest(unittest.TestCase):
         """既存FAQ比較は数値ではなく説明文で返す。"""
         self.assertEqual(
             build_existing_faq_comparison_label(0.96, True),
-            "既存FAQと内容が近い",
+            "既存FAQとほぼ一致",
         )
         self.assertEqual(
             build_existing_faq_comparison_label(0.88, True),
@@ -157,6 +158,22 @@ class KnowledgeOutputLogicTest(unittest.TestCase):
             build_existing_faq_comparison_label(None, False),
             "既存FAQなし/未照合",
         )
+
+    def test_sheet1_output_filter(self):
+        """既存FAQとほぼ一致する候補はSheet1に出さない。"""
+        self.assertFalse(
+            should_output_to_sheet1(
+                "P3-2確認（既存FAQ完全一致）",
+                "既存FAQとほぼ一致",
+            )
+        )
+        self.assertTrue(
+            should_output_to_sheet1(
+                "P3-2確認（既存FAQ更新候補）",
+                "既存FAQと内容が一部異なる",
+            )
+        )
+        self.assertTrue(should_output_to_sheet1("◯採用", "既存FAQなし/未照合"))
 
 
 if __name__ == "__main__":

@@ -36,6 +36,7 @@ from knowledge_output_utils import (
     build_recommended_action,
     classify_p32_result,
     determine_risk_level,
+    should_output_to_sheet1,
     build_source_logs,
     build_review_reason,
 )
@@ -1005,22 +1006,29 @@ class Phase3Processor:
         knowledge_seq = 1
 
         for group in sorted_groups:
-            # Sheet1は採用候補とP3-2確認候補をレビュー対象として出力する
-            review_candidates = [
-                candidate
-                for candidate in group.candidates
-                if candidate.answer != "-"
-                and (
-                    candidate.is_adopted
-                    or (
-                        self.processing_records.get(candidate.original_idx)
-                        is not None
-                        and self.processing_records[
-                            candidate.original_idx
-                        ].final_result.startswith("P3-2確認")
-                    )
+            # Sheet1は採用候補とP3-2確認候補をレビュー対象として出力する。
+            # 既存FAQとほぼ一致する候補は既存FAQ維持でよいためSheet1には出さない。
+            review_candidates = []
+            for candidate in group.candidates:
+                if candidate.answer == "-":
+                    continue
+                record = self.processing_records.get(candidate.original_idx)
+                final_result = (
+                    record.final_result
+                    if record is not None and record.final_result
+                    else ("◯採用" if candidate.is_adopted else "")
                 )
-            ]
+                max_similarity = (
+                    float(record.p3_2_similarity)
+                    if record is not None and record.p3_2_similarity is not None
+                    else None
+                )
+                faq_comparison = build_existing_faq_comparison_label(
+                    max_similarity=max_similarity,
+                    faq_checked=self.faq_checked,
+                )
+                if should_output_to_sheet1(final_result, faq_comparison):
+                    review_candidates.append(candidate)
             if not review_candidates:
                 continue
 

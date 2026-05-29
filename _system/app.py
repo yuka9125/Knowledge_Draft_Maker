@@ -9,7 +9,7 @@ FAQ自動生成システム - Streamlit アプリケーション
   Phase 1.5: 完全一致チェック（クレンジング後）→ 検証Excel出力 ★追加
   Phase 2: 文字列類似度チェック → 検証Excel出力
   Phase 3-1: Q内重複除去（Embedding）
-  Phase 3-2: 既存FAQとの重複除去 → 最終結果Excel出力
+  Phase 3-2: 既存FAQとの照合 → 最終結果Excel出力
 
 ★修正:
 - インデックスを正しく保持してPhase間でデータを受け渡し
@@ -316,6 +316,21 @@ def read_csv_flexible(file_or_path, **kwargs):
 # ================================================================================
 # 結果表示関数
 # ================================================================================
+def summarize_review_targets(records):
+    """Sheet1レビュー対象件数と既存FAQほぼ一致の除外件数を集計する。"""
+    review_target_count = 0
+    exact_faq_count = 0
+    for record in records.values():
+        if record.answer == "-":
+            continue
+        final_result = record.final_result or ""
+        if final_result == "P3-2確認（既存FAQ完全一致）":
+            exact_faq_count += 1
+        elif final_result == "◯採用" or final_result.startswith("P3-2確認"):
+            review_target_count += 1
+    return review_target_count, exact_faq_count
+
+
 def display_results():
     """処理結果を表示"""
     output_dir = st.session_state.get("output_dir")
@@ -324,7 +339,7 @@ def display_results():
         st.warning("結果ファイルが見つかりません")
         return
 
-    st.header("✅ 処理完了")
+    st.header("処理完了")
 
     # 処理時間の表示
     if st.session_state.get("processing_time"):
@@ -332,26 +347,28 @@ def display_results():
 
     if st.session_state.get("reduction_summary"):
         summary = st.session_state["reduction_summary"]
-        st.subheader("📊 処理サマリー")
+        st.subheader("出力サマリー")
 
-        col1, col2, col3, col4, col5 = st.columns(5)
-        col1.metric("元データ", f"{summary.get('original', 0)}件")
+        col1, col2, col3 = st.columns(3)
+        col1.metric("元ログ", f"{summary.get('original', 0)}件")
         col2.metric(
             "Phase 0後",
             f"{summary.get('after_p0', 0)}件",
             delta=f"代表{summary.get('representative', 0)}件",
             delta_color="off",
         )
-        col3.metric("Phase 1後", f"{summary.get('after_p1', 0)}件")
+        col3.metric("FAQ候補", f"{summary.get('after_p1', 0)}件")
+        col4, col5, col6 = st.columns(3)
         col4.metric("Phase 2後", f"{summary.get('after_p2', 0)}件")
-        col5.metric("最終結果", f"{summary.get('final', 0)}件")
+        col5.metric("Sheet1レビュー対象", f"{summary.get('final', 0)}件")
+        col6.metric("FAQほぼ一致除外", f"{summary.get('exact_faq', 0)}件")
 
-        reduction_rate = 100 - (
+        review_target_rate = (
             summary.get("final", 0) / max(summary.get("original", 1), 1) * 100
         )
         st.progress(
-            1 - (summary.get("final", 0) / max(summary.get("original", 1), 1)),
-            text=f"削減率: {reduction_rate:.1f}%",
+            min(review_target_rate / 100, 1.0),
+            text=f"Sheet1レビュー対象率: {review_target_rate:.1f}%",
         )
 
         # API節約率も表示
@@ -362,13 +379,14 @@ def display_results():
             if original_api_calls > 0
             else 0
         )
-        st.write(
-            f"推定APIコスト： 約{summary.get('estimated_cost', 0):,.1f}円（クレンジングAPI節約率: {api_saving_rate:.1f}%）"
+        st.caption(
+            f"推定APIコスト: 約{summary.get('estimated_cost', 0):,.1f}円 / "
+            f"クレンジングAPI節約率: {api_saving_rate:.1f}%"
         )
 
     st.divider()
 
-    st.subheader("📥 最終結果ダウンロード")
+    st.subheader("結果ファイル")
 
     final_excel_files = sorted(
         glob.glob(os.path.join(output_dir, "FAQ_final_result_*.xlsx")),
@@ -377,7 +395,7 @@ def display_results():
     if final_excel_files:
         with open(final_excel_files[0], "rb") as f:
             st.download_button(
-                label="📊 最終結果Excel（FAQ_final_result.xlsx）",
+                label="最終結果Excel（FAQ_final_result.xlsx）",
                 data=f.read(),
                 file_name="FAQ_final_result.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -637,13 +655,13 @@ with st.sidebar:
                 faq_df = None
     else:
         # デフォルトFAQなし
-        st.info("💡 デフォルトFAQなし（Phase 3: FAQ重複除去をスキップ）")
+        st.info("デフォルトFAQなし（Phase 3: 既存FAQ照合をスキップ）")
 
         faq_file = st.file_uploader(
             "既存FAQ（オプション）",
             type=["csv"],
             key="faq_csv",
-            help="アップロードするとFAQ重複除去が実行されます",
+            help="アップロードすると既存FAQ照合が実行されます",
         )
 
         if faq_file:
@@ -819,20 +837,21 @@ if snow_df is None:
             """
             )
 
-        with st.expander("Q2: 最終結果で何が削除されたか確認するには？"):
+        with st.expander("Q2: 処理結果を確認するには？"):
             st.markdown(
                 """
 **全データ処理履歴シート**の「最終結果」カラムで確認できます：
-- `◯採用`: 最終ナレッジ候補として出力される
+- `◯採用`: Sheet1レビュー対象として出力される
 - `P0削除（完全一致）`: Phase 0で削除（問い合わせ内容が完全一致）
 - `P0削除（類似）`: Phase 0で削除（問い合わせ内容の類似度0.9以上）
 - `P0削除（短文）`: Phase 0で削除（回答内容が30文字以内）
 - `P2削除（完全一致）`: Phase 2で削除（質問が完全一致）
 - `P2削除（類似）`: Phase 2で削除（質問の類似度が閾値以上）
 - `P3-1削除`: Phase 3-1で削除（Embedding類似度）
-- `P3-2確認（既存FAQ完全一致/類似/更新候補/矛盾可能性）`: Phase 3-2で既存FAQとの関係を確認
+- `P3-2確認（既存FAQ完全一致）`: 既存FAQとほぼ一致するためSheet1には出さない
+- `P3-2確認（既存FAQ類似/更新候補/矛盾可能性）`: Sheet1レビュー対象として出力される
 - `FAQ対象外`: AIがナレッジ候補に適さないと判断
-            """
+        """
             )
 
         with st.expander("Q3: デフォルトFAQはどこに配置する？"):
@@ -1004,7 +1023,7 @@ else:
                 # ===========================
                 # Phase 3: Embedding重複除去
                 # ===========================
-                st.write("🔄 **Phase 3**: Embedding重複除去...")
+                st.write("🔄 **Phase 3**: Embedding照合...")
 
                 from deduplication_system import run_phase3
 
@@ -1018,10 +1037,14 @@ else:
                     processing_records=p2_records,
                     gid_tracker=gid_tracker,
                 )
-                final_count = len(
-                    final_df[final_df["回答"].astype(str) != "-"]
+                review_target_count, exact_faq_count = summarize_review_targets(
+                    final_records
                 )
-                st.write(f"  ✅ 完了: {after_p2}件 → {final_count}件")
+                st.write(
+                    "  ✅ 完了: "
+                    f"{after_p2}件 → Sheet1レビュー対象 {review_target_count}件"
+                    f"（FAQほぼ一致除外 {exact_faq_count}件）"
+                )
 
                 status.update(label="✅ 全処理完了", state="complete")
 
@@ -1030,7 +1053,7 @@ else:
                 f"{elapsed.seconds // 60}分 {elapsed.seconds % 60}秒"
             )
 
-            st.success("✅ 処理が正常に完了しました！")
+            st.success("処理が正常に完了しました")
 
             st.session_state["processing_done"] = True
             st.session_state["output_dir"] = output_dir
@@ -1048,7 +1071,8 @@ else:
                 "representative": representative_count,
                 "after_p1": after_p1,
                 "after_p2": after_p2,
-                "final": final_count,
+                "final": review_target_count,
+                "exact_faq": exact_faq_count,
                 "estimated_cost": estimated_cost,
             }
 
