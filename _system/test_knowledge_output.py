@@ -175,6 +175,26 @@ class KnowledgeOutputLogicTest(unittest.TestCase):
         )
         self.assertTrue(should_output_to_sheet1("◯採用", "既存FAQなし/未照合"))
 
+    def test_judgement_reason_prefers_ai_reasons(self):
+        """AIクレンジングの理由があれば判定根拠で優先する。"""
+        reason = build_judgement_reason(
+            confidence=0.91,
+            similar_logs_count=2,
+            faq_comparison="既存FAQと内容が一部異なる",
+            answer="申請方法を案内します。",
+            category="申請",
+            risk_level="low",
+            final_result="◯採用",
+            confidence_reason="質問と回答が対応し手順が具体的なため",
+            risk_reason="権限や個人情報への直接影響が小さいため",
+        )
+
+        self.assertEqual(
+            reason,
+            "信頼度理由: 質問と回答が対応し手順が具体的なため\n"
+            "リスク理由: 権限や個人情報への直接影響が小さいため",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -41,7 +41,7 @@ def clean_dataframe(
         max_concurrent: 並列数
 
     Returns:
-        クレンジング済みDataFrame（質問、回答、カテゴリ、キーワード、リンク名、立場、信頼度）
+        クレンジング済みDataFrame（質問、回答、カテゴリ、キーワード、リンク名、立場、信頼度、理由）
         ※インデックスは入力dfと同一
         ※FAQ除外データは質問=「【FAQ除外】理由」、回答=「-」
     """
@@ -77,6 +77,9 @@ def clean_dataframe(
                 "リンク名": cleaned_data.link_names,
                 "立場": cleaned_data.user_role,
                 "信頼度": cleaned_data.confidence_score,
+                "信頼度理由": cleaned_data.confidence_reason,
+                "AIリスクレベル": cleaned_data.risk_level,
+                "リスク理由": cleaned_data.risk_reason,
             }
         else:
             # FAQ除外の場合は特別な形式
@@ -88,6 +91,9 @@ def clean_dataframe(
                 "リンク名": "",
                 "立場": "",
                 "信頼度": "",
+                "信頼度理由": "",
+                "AIリスクレベル": "",
+                "リスク理由": "",
             }
 
     # 元のインデックス順で行を作成
@@ -116,6 +122,9 @@ class CleanedIncidentData:
     user_role: str
     is_answer_modified: bool
     confidence_score: float
+    confidence_reason: str = ""
+    risk_level: str = ""
+    risk_reason: str = ""
     is_faq_candidate: bool = True  # ★追加: FAQ候補かどうか
     exclusion_reason: str = ""  # ★追加: 除外理由
     processing_error: bool = False  # API処理失敗フラグ
@@ -213,6 +222,9 @@ class FastIncidentDataCleaner:
             user_role="",
             is_answer_modified=False,
             confidence_score=0.0,
+            confidence_reason="API処理に失敗したため判定不可",
+            risk_level="low",
+            risk_reason="FAQ候補として利用しないため公開リスクは低い",
             is_faq_candidate=False,
             exclusion_reason=f"生成処理失敗({summary})",
             processing_error=True,
@@ -279,7 +291,10 @@ class FastIncidentDataCleaner:
     "link_names": "URL名またはマニュアル名",
     "user_role": "申請者",
     "is_answer_modified": false,
-    "confidence_score": 0.95
+    "confidence_score": 0.95,
+    "confidence_reason": "質問タイプと回答が対応し、手順が具体的なため",
+    "risk_level": "low",
+    "risk_reason": "権限・個人情報・会計処理への直接影響が小さいため"
 }}
 ```
 
@@ -394,8 +409,26 @@ is_faq_candidate が false の場合:
 - 「どこで確認できますか？」→「登録されています」= 不整合（0.30）
 - 「どうすればいいですか？」→「対応しました」= 不整合（0.30）
 
+### 信頼度理由（confidence_reason）
+- confidence_score の理由を30文字以内で記載
+- 元ログ件数ではなく、この1件の概要と対応結果の整合性を説明
+- 例:「質問と回答が対応し手順が具体的なため」
+- 例:「回答が事後報告中心で手順が不足するため」
+
+### リスクレベル（risk_level）
+- 「critical」「high」「low」から選択
+- critical: 認証、権限、管理者操作、アクセス制御に関係する
+- high: 人事、給与、セキュリティ、パスワード、個人情報、会計処理に関係する
+- low: 上記に該当せず、誤案内時の影響が限定的
+
+### リスク理由（risk_reason）
+- risk_level の理由を30文字以内で記載
+- low の場合は「手戻りが起きる」など強い影響を書かず、直接影響が小さい理由を書く
+- 例:「権限や個人情報への直接影響が小さいため」
+- 例:「パスワード案内を含み影響が大きいため」
+
 必ず上記のJSON形式のみを出力してください。説明文は不要です。
-補足: risk_level / existing_faq_diff_reason / review_status / source_logs / cluster_id / knowledge_id は後続処理で自動付与されるため、ここでは出力しないでください。
+補足: existing_faq_diff_reason / review_status / source_logs / cluster_id / knowledge_id は後続処理で自動付与されるため、ここでは出力しないでください。
 """
 
                     response_api = await self.async_client.chat.completions.create(
@@ -408,7 +441,7 @@ is_faq_candidate が false の場合:
                             {"role": "user", "content": prompt},
                         ],
                         temperature=0.0,
-                        max_tokens=1500,
+                        max_tokens=1700,
                     )
 
                     content = response_api.choices[0].message.content.strip()
@@ -460,6 +493,11 @@ is_faq_candidate が false の場合:
                             confidence_score=result_data.get(
                                 "confidence_score", 0.0
                             ),
+                            confidence_reason=result_data.get(
+                                "confidence_reason", ""
+                            ),
+                            risk_level=result_data.get("risk_level", ""),
+                            risk_reason=result_data.get("risk_reason", ""),
                             is_faq_candidate=True,
                             exclusion_reason="",
                             processing_error=False,
@@ -476,6 +514,9 @@ is_faq_candidate が false の場合:
                             user_role="",
                             is_answer_modified=False,
                             confidence_score=0.0,
+                            confidence_reason="FAQ候補対象外のため",
+                            risk_level="low",
+                            risk_reason="公開対象外のため",
                             is_faq_candidate=False,
                             exclusion_reason=exclusion_reason
                             or "FAQ対象外と判定",
@@ -611,6 +652,9 @@ is_faq_candidate が false の場合:
                     user_role="",
                     is_answer_modified=False,
                     confidence_score=0.0,
+                    confidence_reason="生成処理失敗のため判定不可",
+                    risk_level="low",
+                    risk_reason="FAQ候補として公開しないため",
                     is_faq_candidate=False,
                     exclusion_reason=f"生成処理失敗({summary})",
                     processing_error=False,
@@ -678,6 +722,9 @@ is_faq_candidate が false の場合:
                         "リンク名": cleaned_data.link_names,
                         "立場": cleaned_data.user_role,
                         "信頼度": cleaned_data.confidence_score,
+                        "信頼度理由": cleaned_data.confidence_reason,
+                        "AIリスクレベル": cleaned_data.risk_level,
+                        "リスク理由": cleaned_data.risk_reason,
                     }
                 else:
                     new_row = {
@@ -688,6 +735,9 @@ is_faq_candidate が false の場合:
                         "リンク名": "",
                         "立場": "",
                         "信頼度": "",
+                        "信頼度理由": "",
+                        "AIリスクレベル": "",
+                        "リスク理由": "",
                     }
                     excluded_count += 1
                 converted_data.append(new_row)

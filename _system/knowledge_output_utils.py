@@ -198,8 +198,16 @@ def build_judgement_reason(
     category: str,
     risk_level: str,
     final_result: str,
+    confidence_reason: str = "",
+    risk_reason: str = "",
 ) -> str:
     """Sheet1向けに信頼度理由とリスク理由を2行形式で返す。"""
+    if confidence_reason and risk_reason:
+        return (
+            f"信頼度理由: {normalize_text_for_conflict(confidence_reason)}"
+            f"\nリスク理由: {normalize_text_for_conflict(risk_reason)}"
+        )
+
     clarity = _answer_clarity_label(answer)
     if final_result.startswith("P3-2確認"):
         pending = "FAQ更新要否は未確認"

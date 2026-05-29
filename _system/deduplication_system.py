@@ -136,6 +136,16 @@ def safe_get_confidence(row, col_name="信頼度"):
         return 0.0
 
 
+def safe_get_text(row, col_name: str) -> str:
+    """DataFrame行から文字列を安全に取得する。"""
+    if row is None or col_name not in row.index:
+        return ""
+    val = row.get(col_name)
+    if pd.isna(val) or val is None:
+        return ""
+    return str(val).strip()
+
+
 def extract_faq_id(faq_row, fallback_row_number: Optional[int] = None) -> str:
     """既存FAQ行からID候補を取得する。無ければExcel行番号で補完する。"""
     if faq_row is not None:
@@ -1082,6 +1092,9 @@ class Phase3Processor:
                     if row is not None
                     else float(adopted.confidence_score)
                 )
+                confidence_reason = safe_get_text(row, "信頼度理由")
+                ai_risk_level = safe_get_text(row, "AIリスクレベル")
+                ai_risk_reason = safe_get_text(row, "リスク理由")
                 record = self.processing_records.get(adopted.original_idx)
                 final_result = (
                     record.final_result
@@ -1102,7 +1115,7 @@ class Phase3Processor:
                     threshold=self.threshold_faq,
                     faq_checked=self.faq_checked,
                 )
-                risk_level = determine_risk_level(answer, category)
+                risk_level = ai_risk_level or determine_risk_level(answer, category)
                 review_reason = build_review_reason(
                     existing_faq_diff_reason=existing_faq_diff_reason,
                     risk_level=risk_level,
@@ -1147,6 +1160,8 @@ class Phase3Processor:
                             category=category,
                             risk_level=risk_level,
                             final_result=final_result,
+                            confidence_reason=confidence_reason,
+                            risk_reason=ai_risk_reason,
                         ),
                         "risk_level": risk_level,
                         "review_status": "draft",
