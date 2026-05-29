@@ -32,6 +32,7 @@ DEFAULT_APPROVED_PATH = "data/outputs/approved_knowledge.json"
 EMBEDDING_THRESHOLD = 0.80
 # テキスト類似度（SequenceMatcher）のしきい値
 TEXT_THRESHOLD = 0.86
+MIN_CONTAINED_QUESTION_LENGTH = 8
 
 
 def _cosine_similarity(vec_a: List[float], vec_b: List[float]) -> float:
@@ -200,9 +201,15 @@ class GovernedKnowledgeService:
             normalized_question = _normalize(question)
             if not normalized_question:
                 continue
-            score = SequenceMatcher(
-                None, normalized_query, normalized_question
-            ).ratio()
+            if (
+                len(normalized_question) >= MIN_CONTAINED_QUESTION_LENGTH
+                and normalized_question in normalized_query
+            ):
+                score = 1.0
+            else:
+                score = SequenceMatcher(
+                    None, normalized_query, normalized_question
+                ).ratio()
             if score > best_score:
                 best_score = score
                 best_idx = idx

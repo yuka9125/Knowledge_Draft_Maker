@@ -72,7 +72,7 @@ class GovernedKnowledgeServiceTest(unittest.TestCase):
 
     def test_partial_match_is_answerable(self):
         service = _build_service(SAMPLE_KNOWLEDGE)
-        result = service.search("VPNにつながりません")
+        result = service.search("VPNにつながりません。在宅勤務中です")
         self.assertTrue(result["answerable"])
         self.assertEqual(result["knowledge_id"], "k-010")
 
