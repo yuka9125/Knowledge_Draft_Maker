@@ -7,9 +7,12 @@
 import unittest
 
 from knowledge_output_utils import (
+    build_judgement_reason,
     build_existing_faq_diff_analysis,
+    build_recommended_action,
     build_review_reason,
     build_source_logs,
+    classify_p32_result,
     determine_risk_level,
 )
 
@@ -65,6 +68,53 @@ class KnowledgeOutputLogicTest(unittest.TestCase):
         self.assertIn(
             "critical",
             build_review_reason("none", "critical", 0.9),
+        )
+
+    def test_p32_classification(self):
+        """P3-2確認ステータスの類似度しきい値を検証。"""
+        self.assertEqual(
+            classify_p32_result(0.96, "同じ回答", "同じ回答"),
+            "P3-2確認（既存FAQ完全一致）",
+        )
+        self.assertEqual(
+            classify_p32_result(0.88, "候補回答", "既存FAQ回答"),
+            "P3-2確認（既存FAQ類似）",
+        )
+        self.assertEqual(
+            classify_p32_result(0.76, "新しい手順です", "古い手順です"),
+            "P3-2確認（既存FAQ矛盾可能性）",
+        )
+        self.assertEqual(
+            classify_p32_result(0.76, "申請先が変わりました", "旧申請先です"),
+            "P3-2確認（既存FAQ更新候補）",
+        )
+
+    def test_recommended_action_and_judgement_reason(self):
+        """推奨アクションと判定根拠を検証。"""
+        self.assertEqual(build_recommended_action("◯採用"), "新規FAQ作成")
+        self.assertEqual(
+            build_recommended_action("P3-2確認（既存FAQ完全一致）"),
+            "既存FAQ維持",
+        )
+        self.assertEqual(
+            build_recommended_action("P3-2確認（既存FAQ類似）"),
+            "既存FAQに統合",
+        )
+        self.assertEqual(
+            build_recommended_action("P3-2確認（既存FAQ更新候補）"),
+            "既存FAQ更新",
+        )
+        self.assertEqual(
+            build_recommended_action("P3-2確認（既存FAQ矛盾可能性）"),
+            "人間レビュー必須",
+        )
+        self.assertIn(
+            "新規FAQ候補",
+            build_judgement_reason("◯採用"),
+        )
+        self.assertIn(
+            "更新候補",
+            build_judgement_reason("P3-2確認（既存FAQ更新候補）"),
         )
 
 

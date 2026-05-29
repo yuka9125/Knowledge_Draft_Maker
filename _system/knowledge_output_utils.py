@@ -49,6 +49,80 @@ def build_existing_faq_diff_reason(
     return "回答内容に大きく変更あり"
 
 
+def has_conflict_signal(candidate_answer: str, matched_faq_answer: str) -> bool:
+    """回答同士に相反する運用の可能性を示す語があるか判定する。"""
+    candidate = normalize_text_for_conflict(candidate_answer)
+    faq = normalize_text_for_conflict(matched_faq_answer)
+    conflict_pairs = [
+        ("旧", "新"),
+        ("古い", "最新"),
+        ("古い", "新しい"),
+        ("旧システム", "新システム"),
+        ("廃止", "利用"),
+        ("使用不可", "使用可能"),
+        ("できません", "できます"),
+        ("不要", "必要"),
+    ]
+    return any(
+        (left in candidate and right in faq)
+        or (right in candidate and left in faq)
+        for left, right in conflict_pairs
+    )
+
+
+def classify_p32_result(
+    max_similarity: float | None,
+    candidate_answer: str,
+    matched_faq_answer: str,
+) -> str:
+    """既存FAQ照合結果をP3-2確認ステータスへ分類する。"""
+    if max_similarity is None:
+        return "P3-2確認（既存FAQ更新候補）"
+
+    if max_similarity >= 0.95:
+        return "P3-2確認（既存FAQ完全一致）"
+    if max_similarity >= 0.85:
+        return "P3-2確認（既存FAQ類似）"
+    if max_similarity >= 0.75:
+        if has_conflict_signal(candidate_answer, matched_faq_answer):
+            return "P3-2確認（既存FAQ矛盾可能性）"
+        candidate = normalize_text_for_conflict(candidate_answer)
+        faq = normalize_text_for_conflict(matched_faq_answer)
+        if candidate and faq and candidate != faq:
+            return "P3-2確認（既存FAQ更新候補）"
+        return "P3-2確認（既存FAQ類似）"
+    return "◯採用"
+
+
+def build_recommended_action(final_result: str) -> str:
+    """最終結果からSheet1向けの推奨アクションを返す。"""
+    if final_result == "◯採用":
+        return "新規FAQ作成"
+    if final_result == "P3-2確認（既存FAQ完全一致）":
+        return "既存FAQ維持"
+    if final_result == "P3-2確認（既存FAQ類似）":
+        return "既存FAQに統合"
+    if final_result == "P3-2確認（既存FAQ更新候補）":
+        return "既存FAQ更新"
+    if final_result == "P3-2確認（既存FAQ矛盾可能性）":
+        return "人間レビュー必須"
+    if final_result == "FAQ対象外":
+        return "FAQ対象外"
+    return ""
+
+
+def build_judgement_reason(final_result: str) -> str:
+    """最終結果からSheet1向けの判定根拠を返す。"""
+    reason_by_result = {
+        "◯採用": "類似する既存FAQが見つからないため、新規FAQ候補として採用。",
+        "P3-2確認（既存FAQ完全一致）": "既存FAQと質問・回答がほぼ一致しているため、既存FAQ維持候補として確認。",
+        "P3-2確認（既存FAQ類似）": "既存FAQと同一テーマだが、表現や補足情報に差分があるため、統合候補として確認。",
+        "P3-2確認（既存FAQ更新候補）": "既存FAQと同一テーマだが、回答内容に差分があるため、更新候補として確認。",
+        "P3-2確認（既存FAQ矛盾可能性）": "既存FAQと新規候補で案内内容が異なるため、現行運用の確認が必要。",
+    }
+    return reason_by_result.get(final_result, "")
+
+
 def determine_risk_level(answer: str, category: str) -> str:
     """回答文とカテゴリからリスクレベルを判定する。"""
     target_text = f"{answer} {category}"

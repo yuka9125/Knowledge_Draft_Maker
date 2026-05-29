@@ -133,7 +133,7 @@ class ProcessingRecord:
     p3_2_similarity: Optional[float] = None
     final_gid: Optional[int] = None
     final_result: str = (
-        ""  # "◯採用", "P0削除（完全一致）", "P0削除（類似）", "P0削除（短文）", "P2削除（完全一致）", "P2削除（類似）", "P3-1削除", "P3-2削除", "FAQ対象外"
+        ""  # "◯採用", "P0削除（完全一致）", "P0削除（類似）", "P0削除（短文）", "P2削除（完全一致）", "P2削除（類似）", "P3-1削除", "P3-2確認（...）", "FAQ対象外"
     )
     raw_overview: str = ""
     raw_response: str = ""
@@ -271,19 +271,19 @@ class VerificationExcelWriter:
         if knowledge_candidates is not None:
             headers = [
                 "ナレッジID",
-                "クラスタID",
                 "グループID",
-                "質問",
-                "回答",
+                "候補_質問",
+                "候補_回答",
                 "カテゴリ",
-                "元ログ一覧",
                 "統合件数",
+                "既存FAQ_質問",
+                "既存FAQ_回答",
+                "既存FAQ_類似度",
                 "リスクレベル",
-                "レビュー状態",
-                "レビュー結果",
-                "既存FAQ差分理由",
-                "レビュー理由",
                 "信頼度",
+                "推奨アクション",
+                "判定根拠",
+                "レビュー結果",
             ]
 
             for col, header in enumerate(headers, 1):
@@ -292,75 +292,46 @@ class VerificationExcelWriter:
 
             row_idx = 2
             for item in knowledge_candidates:
-                answers = [
-                    str(item.get("answer_candidate_1", "")).strip(),
-                    str(item.get("answer_candidate_2", "")).strip(),
-                    str(item.get("answer_candidate_3", "")).strip(),
+                similarity = item.get("matched_faq_similarity")
+                similarity_value = (
+                    "" if similarity is None else f"{float(similarity):.3f}"
+                )
+                row_values = [
+                    str(item.get("knowledge_id", "")),
+                    str(item.get("group_id", "")),
+                    str(item.get("question", "")),
+                    str(item.get("answer", "")),
+                    str(item.get("category", "")),
+                    item.get("similar_logs_count", 0),
+                    str(item.get("matched_faq_question", "")),
+                    str(item.get("matched_faq_answer", "")),
+                    similarity_value,
+                    str(item.get("risk_level", "")),
+                    item.get("confidence", 0.0),
+                    str(item.get("recommended_action", "")),
+                    str(item.get("judgement_reason", "")),
+                    str(item.get("review_result", "未確認") or "未確認"),
                 ]
-                answers = [answer for answer in answers if answer]
-                if not answers:
-                    answers = [str(item.get("answer", ""))]
 
-                for answer_idx, answer_text in enumerate(answers):
-                    if answer_idx == 0:
-                        row_values = [
-                            str(item.get("knowledge_id", "")),
-                            str(item.get("cluster_id", "")),
-                            str(item.get("group_id", "")),
-                            str(item.get("question", "")),
-                            answer_text,
-                            str(item.get("category", "")),
-                            "\n".join(item.get("source_logs", [])),
-                            item.get("similar_logs_count", 0),
-                            str(item.get("risk_level", "")),
-                            str(item.get("review_status", "")),
-                            str(item.get("review_result", "")),
-                            str(item.get("existing_faq_diff_reason", "")),
-                            str(item.get("review_reason", "")),
-                            item.get("confidence", 0.0),
-                        ]
-                    else:
-                        # 回答候補2/3は縦に追加し、回答列のみ値を入れる
-                        row_values = [
-                            "",
-                            "",
-                            "",
-                            "",
-                            answer_text,
-                            "",
-                            "",
-                            "",
-                            "",
-                            "",
-                            "",
-                            "",
-                            "",
-                            "",
-                        ]
+                row_fill = ADOPTED_FILL
+                for col_idx, value in enumerate(row_values, 1):
+                    cell = ws.cell(row=row_idx, column=col_idx, value=value)
+                    apply_cell_style(cell, fill=row_fill)
+                row_idx += 1
 
-                    row_fill = (
-                        ADOPTED_FILL
-                        if answer_idx == 0
-                        else ANSWER_CANDIDATE_SUB_FILL
-                    )
-                    for col_idx, value in enumerate(row_values, 1):
-                        cell = ws.cell(row=row_idx, column=col_idx, value=value)
-                        apply_cell_style(cell, fill=row_fill)
-                    row_idx += 1
-
-            widths = [12, 12, 10, 48, 60, 18, 40, 12, 12, 12, 12, 28, 34, 10]
+            widths = [12, 10, 48, 60, 18, 12, 48, 60, 14, 12, 10, 18, 52, 16]
             set_column_widths(ws, widths)
 
-            # レビュー結果列は 空欄 / 採用 / 不採用 のみ選択可能
+            # レビュー結果列は固定選択肢のみ入力可能
             if row_idx > 2:
-                review_result_col = 11  # 1始まり
+                review_result_col = 14  # 1始まり
                 dv = DataValidation(
                     type="list",
-                    formula1='"採用,不採用"',
-                    allow_blank=True,
+                    formula1='"未確認,新規採用,既存FAQ維持,既存FAQ更新,却下,要確認"',
+                    allow_blank=False,
                     showErrorMessage=True,
                     errorTitle="入力値エラー",
-                    error="レビュー結果は 空欄・採用・不採用 のみ入力できます。",
+                    error="レビュー結果は指定された選択肢から入力してください。",
                 )
                 ws.add_data_validation(dv)
                 dv.add(

@@ -30,7 +30,10 @@ from typing import List, Dict, Tuple, Optional, Any
 from scipy.cluster.hierarchy import linkage, fcluster
 from scipy.spatial.distance import squareform
 from knowledge_output_utils import (
+    build_judgement_reason,
     build_existing_faq_diff_reason,
+    build_recommended_action,
+    classify_p32_result,
     determine_risk_level,
     build_source_logs,
     build_review_reason,
@@ -740,7 +743,7 @@ class Phase32Deduplicator:
 
                 # 採用判定更新
                 if max_faq_similarity >= self.threshold:
-                    # FAQと重複 → 不採用
+                    # FAQと近い候補は削除ではなく、人間レビュー対象として確認に回す
                     new_candidate = GroupCandidate(
                         original_idx=candidate.original_idx,
                         rank=candidate.rank,
@@ -759,9 +762,14 @@ class Phase32Deduplicator:
                     )
 
                     if candidate.original_idx in self.processing_records:
+                        matched_answer = str(self.faq_df.iloc[max_faq_idx]["回答"])
                         self.processing_records[
                             candidate.original_idx
-                        ].final_result = "P3-2削除"
+                        ].final_result = classify_p32_result(
+                            max_similarity=max_faq_similarity,
+                            candidate_answer=candidate.answer,
+                            matched_faq_answer=matched_answer,
+                        )
 
                     updated_candidates.append(new_candidate)
                 else:
@@ -965,18 +973,29 @@ class Phase3Processor:
 
         # 出力用に索引化
         faq_rows_by_idx = {idx: row for idx, row in faq_only_df.iterrows()}
+        source_rows_by_idx = {idx: row for idx, row in source_df.iterrows()}
 
         knowledge_candidates: List[Dict[str, Any]] = []
         knowledge_seq = 1
 
         for group in sorted_groups:
-            # 採用候補のみ（FAQ除外を除外）
-            adopted_candidates = [
+            # Sheet1は採用候補とP3-2確認候補をレビュー対象として出力する
+            review_candidates = [
                 candidate
                 for candidate in group.candidates
-                if candidate.is_adopted and candidate.answer != "-"
+                if candidate.answer != "-"
+                and (
+                    candidate.is_adopted
+                    or (
+                        self.processing_records.get(candidate.original_idx)
+                        is not None
+                        and self.processing_records[
+                            candidate.original_idx
+                        ].final_result.startswith("P3-2確認")
+                    )
+                )
             ]
-            if not adopted_candidates:
+            if not review_candidates:
                 continue
 
             # 既存仕様に合わせて「回答候補1〜3」を保持（Excel表示用）
@@ -993,7 +1012,7 @@ class Phase3Processor:
             if not member_indices:
                 # 保険: クラスタ情報が見つからない場合は採用候補のidxを使用
                 member_indices = [
-                    candidate.original_idx for candidate in adopted_candidates
+                    candidate.original_idx for candidate in review_candidates
                 ]
 
             titles_by_index: Dict[Any, str] = {}
@@ -1005,17 +1024,36 @@ class Phase3Processor:
                         )
             source_logs = build_source_logs(titles_by_index, member_indices)
 
-            for adopted in adopted_candidates:
+            for adopted in review_candidates:
                 row = faq_rows_by_idx.get(adopted.original_idx)
-                question = str(row.get("質問", adopted.question)) if row is not None else str(adopted.question)
-                answer = str(row.get("回答", adopted.answer)) if row is not None else str(adopted.answer)
-                category = str(row.get("カテゴリ", adopted.category)) if row is not None else str(adopted.category)
+                if row is None:
+                    row = source_rows_by_idx.get(adopted.original_idx)
+                question = (
+                    str(row.get("質問", adopted.question))
+                    if row is not None
+                    else str(adopted.question)
+                )
+                answer = (
+                    str(row.get("回答", adopted.answer))
+                    if row is not None
+                    else str(adopted.answer)
+                )
+                category = (
+                    str(row.get("カテゴリ", adopted.category))
+                    if row is not None
+                    else str(adopted.category)
+                )
                 confidence = (
                     safe_get_confidence(row, "信頼度")
                     if row is not None
                     else float(adopted.confidence_score)
                 )
                 record = self.processing_records.get(adopted.original_idx)
+                final_result = (
+                    record.final_result
+                    if record is not None and record.final_result
+                    else "◯採用"
+                )
                 max_similarity = (
                     float(record.p3_2_similarity)
                     if record is not None and record.p3_2_similarity is not None
@@ -1046,6 +1084,20 @@ class Phase3Processor:
                         "source_logs": source_logs,
                         "similar_logs_count": len(member_indices),
                         "existing_faq_diff_reason": existing_faq_diff_reason,
+                        "matched_faq_question": (
+                            record.matched_faq_question
+                            if record is not None
+                            else ""
+                        ),
+                        "matched_faq_answer": (
+                            record.matched_faq_answer if record is not None else ""
+                        ),
+                        "matched_faq_similarity": max_similarity,
+                        "final_result": final_result,
+                        "recommended_action": build_recommended_action(
+                            final_result
+                        ),
+                        "judgement_reason": build_judgement_reason(final_result),
                         "risk_level": risk_level,
                         "review_status": "draft",
                         "confidence": confidence,
@@ -1101,14 +1153,22 @@ class Phase3Processor:
         csv_columns = [
             "knowledge_id",
             "cluster_id",
+            "group_id",
             "question",
             "answer",
             "category",
             "source_logs",
             "similar_logs_count",
+            "matched_faq_question",
+            "matched_faq_answer",
+            "matched_faq_similarity",
+            "final_result",
+            "recommended_action",
+            "judgement_reason",
             "existing_faq_diff_reason",
             "risk_level",
             "review_status",
+            "review_result",
             "confidence",
         ]
 
