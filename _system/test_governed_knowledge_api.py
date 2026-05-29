@@ -76,11 +76,35 @@ class GovernedKnowledgeServiceTest(unittest.TestCase):
         self.assertTrue(result["answerable"])
         self.assertEqual(result["knowledge_id"], "k-010")
 
+    def test_short_partial_match_is_not_answerable(self):
+        service = _build_service(SAMPLE_KNOWLEDGE)
+        result = service.search("申請方法")
+        self.assertFalse(result["answerable"])
+        self.assertEqual(result["fallback"], "human_review")
+
     def test_unknown_question_is_not_answerable(self):
         service = _build_service(SAMPLE_KNOWLEDGE)
         result = service.search("経費精算の締め日はいつですか")
         self.assertFalse(result["answerable"])
         self.assertEqual(result["reason"], "No approved knowledge found")
+        self.assertEqual(result["fallback"], "human_review")
+
+    def test_unapproved_knowledge_is_not_answerable(self):
+        service = _build_service(
+            [
+                *SAMPLE_KNOWLEDGE,
+                {
+                    "knowledge_id": "k-draft",
+                    "question": "未承認の質問です",
+                    "answer": "この回答は返してはいけません。",
+                    "category": "質問",
+                    "approved_status": "draft",
+                    "approved_at": "",
+                },
+            ]
+        )
+        result = service.search("未承認の質問です")
+        self.assertFalse(result["answerable"])
         self.assertEqual(result["fallback"], "human_review")
 
     def test_empty_query_is_not_answerable(self):

@@ -31,7 +31,7 @@ DEFAULT_APPROVED_PATH = "data/outputs/approved_knowledge.json"
 # Embedding一致のしきい値（cosine類似度）
 EMBEDDING_THRESHOLD = 0.80
 # テキスト類似度（SequenceMatcher）のしきい値
-TEXT_THRESHOLD = 0.60
+TEXT_THRESHOLD = 0.86
 
 
 def _cosine_similarity(vec_a: List[float], vec_b: List[float]) -> float:
@@ -47,6 +47,11 @@ def _cosine_similarity(vec_a: List[float], vec_b: List[float]) -> float:
 def _normalize(text: str) -> str:
     """比較用に空白を畳んで小文字化する。"""
     return " ".join(str(text or "").split()).lower()
+
+
+def _is_approved(item: Dict[str, Any]) -> bool:
+    """API側でも承認済みステータスだけに絞る。"""
+    return str(item.get("approved_status", "")).strip().lower() == "approved"
 
 
 class EmbeddingBackend(Protocol):
@@ -138,7 +143,9 @@ class GovernedKnowledgeService:
             self._items = []
             self._signature = signature
             return
-        self._items = [item for item in data if isinstance(item, dict)]
+        self._items = [
+            item for item in data if isinstance(item, dict) and _is_approved(item)
+        ]
         self._signature = signature
 
     # --- 検索 -------------------------------------------------------------
@@ -193,16 +200,9 @@ class GovernedKnowledgeService:
             normalized_question = _normalize(question)
             if not normalized_question:
                 continue
-            # 部分一致は強いシグナルとして最大スコア扱い
-            if (
-                normalized_query in normalized_question
-                or normalized_question in normalized_query
-            ):
-                score = 1.0
-            else:
-                score = SequenceMatcher(
-                    None, normalized_query, normalized_question
-                ).ratio()
+            score = SequenceMatcher(
+                None, normalized_query, normalized_question
+            ).ratio()
             if score > best_score:
                 best_score = score
                 best_idx = idx
