@@ -56,3 +56,12 @@ Container deployment instructions are in
 The Container Apps package uses `serving/Dockerfile` and bundles only approved
 knowledge. After updating `data/approved_knowledge.json`, refresh
 `serving/data/approved_knowledge.json` and redeploy the container.
+
+## Phase F Preparation
+
+Phase F-0 synthetic benchmark inputs and fixed measurement rules are documented
+in [`docs/phase-f-prep.md`](docs/phase-f-prep.md).
+
+```bash
+python benchmark/conflict/evaluate_conflicts.py
+```

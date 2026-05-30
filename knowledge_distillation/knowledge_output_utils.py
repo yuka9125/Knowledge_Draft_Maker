@@ -8,6 +8,11 @@ import re
 from typing import Any, Dict, List
 
 
+P32_EXACT_MATCH_THRESHOLD = 0.95
+P32_SIMILAR_THRESHOLD = 0.85
+P32_REVIEW_THRESHOLD = 0.75
+
+
 def normalize_text_for_conflict(text: str) -> str:
     """矛盾判定用にテキストを正規化する。"""
     if text is None:
@@ -79,11 +84,11 @@ def classify_p32_result(
     if max_similarity is None:
         return "P3-2確認（既存FAQ更新候補）"
 
-    if max_similarity >= 0.95:
+    if max_similarity >= P32_EXACT_MATCH_THRESHOLD:
         return "P3-2確認（既存FAQ完全一致）"
-    if max_similarity >= 0.85:
+    if max_similarity >= P32_SIMILAR_THRESHOLD:
         return "P3-2確認（既存FAQ類似）"
-    if max_similarity >= 0.75:
+    if max_similarity >= P32_REVIEW_THRESHOLD:
         if has_conflict_signal(candidate_answer, matched_faq_answer):
             return "P3-2確認（既存FAQ矛盾可能性）"
         candidate = normalize_text_for_conflict(candidate_answer)
@@ -118,11 +123,11 @@ def build_existing_faq_comparison_label(
     """既存FAQとの近さをレビュー向けの説明文で返す。"""
     if not faq_checked or max_similarity is None:
         return "既存FAQなし/未照合"
-    if max_similarity >= 0.95:
+    if max_similarity >= P32_EXACT_MATCH_THRESHOLD:
         return "既存FAQとほぼ一致"
-    if max_similarity >= 0.85:
+    if max_similarity >= P32_SIMILAR_THRESHOLD:
         return "既存FAQと内容が近い（一部差分あり）"
-    if max_similarity >= 0.75:
+    if max_similarity >= P32_REVIEW_THRESHOLD:
         return "既存FAQと内容が一部異なる"
     return "既存FAQと内容が異なる"
 
