@@ -102,6 +102,127 @@ class AzureEmbeddingBackend:
             return None
 
 
+# --- 承認済みナレッジの取得元（ファイル / Azure Blob） -------------------
+class KnowledgeSource(Protocol):
+    """承認済みナレッジの取得元インターフェース。"""
+
+    def signature(self) -> Optional[tuple]:
+        """変更検知用の軽量トークン。取得元が無い/不達なら None。"""
+        ...
+
+    def load(self) -> List[Dict[str, Any]]:
+        """承認済みナレッジの生データ（dictのリスト）を返す。"""
+        ...
+
+
+class FileKnowledgeSource:
+    """ローカルファイルから approved_knowledge.json を読む。"""
+
+    def __init__(self, path: str | Path) -> None:
+        self.path = Path(path)
+
+    def signature(self) -> Optional[tuple]:
+        if not self.path.exists():
+            return None
+        stat = self.path.stat()
+        # mtime解像度が粗い環境でも取りこぼさないよう size も含める
+        return ("file", stat.st_mtime, stat.st_size)
+
+    def load(self) -> List[Dict[str, Any]]:
+        try:
+            with self.path.open("r", encoding="utf-8") as f:
+                data = json.load(f)
+        except (json.JSONDecodeError, OSError):
+            return []
+        return data if isinstance(data, list) else []
+
+
+class BlobKnowledgeSource:
+    """Azure Blob Storage から approved_knowledge.json を読む。
+
+    再デプロイ無しでナレッジを差し替えられる。ETag/最終更新で変更検知し、
+    変わった時だけダウンロードする。テスト用に blob_client を注入できる。
+    """
+
+    def __init__(
+        self,
+        container: str,
+        blob_name: str = "approved_knowledge.json",
+        connection_string: str | None = None,
+        account_url: str | None = None,
+        blob_client: Any | None = None,
+    ) -> None:
+        self.container = container
+        self.blob_name = blob_name
+        self._connection_string = connection_string
+        self._account_url = account_url
+        self._blob_client = blob_client
+
+    def _client(self) -> Any:
+        if self._blob_client is not None:
+            return self._blob_client
+        from azure.storage.blob import BlobClient
+
+        if self._connection_string:
+            self._blob_client = BlobClient.from_connection_string(
+                self._connection_string, self.container, self.blob_name
+            )
+        elif self._account_url:
+            from azure.identity import DefaultAzureCredential
+
+            self._blob_client = BlobClient(
+                self._account_url,
+                self.container,
+                self.blob_name,
+                credential=DefaultAzureCredential(),
+            )
+        else:
+            raise RuntimeError(
+                "Blob接続情報が未設定です（接続文字列 or アカウントURLが必要）。"
+            )
+        return self._blob_client
+
+    def signature(self) -> Optional[tuple]:
+        try:
+            props = self._client().get_blob_properties()
+        except Exception:  # noqa: BLE001 - 不達時は「取得元なし」扱い
+            return None
+        return ("blob", str(getattr(props, "etag", "")), str(getattr(props, "last_modified", "")))
+
+    def load(self) -> List[Dict[str, Any]]:
+        try:
+            raw = self._client().download_blob().readall()
+        except Exception:  # noqa: BLE001
+            return []
+        try:
+            data = json.loads(raw)
+        except (json.JSONDecodeError, ValueError):
+            return []
+        return data if isinstance(data, list) else []
+
+
+def build_default_source() -> KnowledgeSource:
+    """環境変数から既定の取得元を選ぶ。
+
+    Blob設定（コンテナ名＋接続文字列 or アカウントURL）があれば Blob、
+    無ければローカルファイル。
+    """
+    container = os.getenv("APPROVED_KNOWLEDGE_BLOB_CONTAINER")
+    connection_string = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
+    account_url = os.getenv("AZURE_STORAGE_ACCOUNT_URL")
+    blob_name = os.getenv("APPROVED_KNOWLEDGE_BLOB_NAME", "approved_knowledge.json")
+    if container and (connection_string or account_url):
+        return BlobKnowledgeSource(
+            container=container,
+            blob_name=blob_name,
+            connection_string=connection_string,
+            account_url=account_url,
+        )
+    return FileKnowledgeSource(
+        os.getenv("APPROVED_KNOWLEDGE_PATH", DEFAULT_APPROVED_PATH)
+    )
+
+
 class GovernedKnowledgeService:
     """承認済みKnowledgeの読み込みと検索を担う。"""
 
@@ -111,39 +232,31 @@ class GovernedKnowledgeService:
         embedding_backend: EmbeddingBackend | None = None,
         embedding_threshold: float = EMBEDDING_THRESHOLD,
         text_threshold: float = TEXT_THRESHOLD,
+        source: KnowledgeSource | None = None,
     ) -> None:
-        self.approved_path = Path(
-            approved_path
-            or os.getenv("APPROVED_KNOWLEDGE_PATH", DEFAULT_APPROVED_PATH)
-        )
+        if source is not None:
+            self.source: KnowledgeSource = source
+        elif approved_path is not None:
+            self.source = FileKnowledgeSource(approved_path)
+        else:
+            self.source = build_default_source()
         self.embedding_backend = embedding_backend or AzureEmbeddingBackend()
         self.embedding_threshold = embedding_threshold
         self.text_threshold = text_threshold
         self._items: List[Dict[str, Any]] = []
-        self._signature: tuple[float, int] | None = None
+        self._signature: Optional[tuple] = None
 
     # --- データ読み込み ---------------------------------------------------
     def _load_if_needed(self) -> None:
-        """approved_knowledge.json を更新検知付きで読み込む。
-
-        mtimeの解像度が粗い環境でも取りこぼさないよう、mtimeとサイズの
-        両方で変更を検知する。
-        """
-        if not self.approved_path.exists():
+        """取得元（ファイル/Blob）を変更検知付きで読み込む。"""
+        signature = self.source.signature()
+        if signature is None:
             self._items = []
             self._signature = None
             return
-        stat = self.approved_path.stat()
-        signature = (stat.st_mtime, stat.st_size)
         if self._signature is not None and signature == self._signature:
             return
-        try:
-            with self.approved_path.open("r", encoding="utf-8") as f:
-                data = json.load(f)
-        except (json.JSONDecodeError, OSError):
-            self._items = []
-            self._signature = signature
-            return
+        data = self.source.load()
         self._items = [
             item for item in data if isinstance(item, dict) and _is_approved(item)
         ]
