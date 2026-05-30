@@ -47,3 +47,12 @@ Important paths:
 - Default contract file: `data/approved_knowledge.json`
 
 Azure OpenAI values are deployment names, not model names.
+
+## Azure Container Apps
+
+Container deployment instructions are in
+[`docs/deploy-containerapps.md`](docs/deploy-containerapps.md).
+
+The Container Apps package uses `serving/Dockerfile` and bundles only approved
+knowledge. After updating `data/approved_knowledge.json`, refresh
+`serving/data/approved_knowledge.json` and redeploy the container.
