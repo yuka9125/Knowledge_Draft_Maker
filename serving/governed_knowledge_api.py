@@ -68,15 +68,23 @@ class AzureEmbeddingBackend:
 
     def __init__(self) -> None:
         self._client = None
-        self._model = os.getenv(
-            "AZURE_OPENAI_EMBEDDING_MODEL", "text-embedding-3-small"
+        self._deployment = os.getenv(
+            "AZURE_OPENAI_EMBEDDING_DEPLOYMENT",
+            os.getenv("AZURE_OPENAI_EMBEDDING_MODEL", "text-embedding-3-large"),
         )
 
     def _get_client(self):
         if self._client is not None:
             return self._client
-        endpoint = os.getenv("AZURE_OPENAI_ENDPOINT_EMBEDDING")
-        api_key = os.getenv("AZURE_OPENAI_API_KEY_EMBEDDING")
+        endpoint = os.getenv(
+            "AZURE_OPENAI_ENDPOINT_EMBEDDING",
+            os.getenv("AZURE_OPENAI_ENDPOINT"),
+        )
+        api_key = os.getenv(
+            "AZURE_OPENAI_API_KEY_EMBEDDING",
+            os.getenv("AZURE_OPENAI_API_KEY"),
+        )
+        api_version = os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-01")
         if not endpoint or not api_key:
             return None
         try:
@@ -84,7 +92,7 @@ class AzureEmbeddingBackend:
 
             self._client = AzureOpenAI(
                 api_key=api_key,
-                api_version="2024-02-01",
+                api_version=api_version,
                 azure_endpoint=endpoint,
             )
             return self._client
@@ -96,7 +104,7 @@ class AzureEmbeddingBackend:
         if not client or not texts:
             return None
         try:
-            response = client.embeddings.create(model=self._model, input=texts)
+            response = client.embeddings.create(model=self._deployment, input=texts)
             return [d.embedding for d in response.data]
         except Exception:  # noqa: BLE001
             return None

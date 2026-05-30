@@ -8,4 +8,5 @@ __pycache__/
 .env
 
 # 生成・出力データ
-data/
+data/*
+!data/approved_knowledge.json
