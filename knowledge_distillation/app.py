@@ -17,6 +17,7 @@ FAQ自動生成システム - Streamlit アプリケーション
 """
 
 import glob
+import json
 import os
 import pandas as pd
 import re
@@ -475,7 +476,15 @@ def display_approved_knowledge_exporter():
             approved_path = os.path.join("data", "approved_knowledge.json")
             export_approved_knowledge_from_excel(reviewed_excel, approved_path)
 
-            st.success(f"承認済みKnowledge: {len(approved_items)}件")
+            try:
+                with open(approved_path, encoding="utf-8") as f:
+                    total_count = len(json.load(f))
+            except Exception:
+                total_count = len(approved_items)
+            st.success(
+                f"今回採用: {len(approved_items)}件 / 統合後 合計: {total_count}件"
+                "（既存FAQ更新は上書き・新規は追加）"
+            )
             with open(approved_path, "rb") as f:
                 st.download_button(
                     label="approved_knowledge.json",

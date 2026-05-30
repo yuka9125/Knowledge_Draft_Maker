@@ -14,7 +14,43 @@ from openpyxl import Workbook
 from knowledge_distillation.approved_knowledge_exporter import (
     export_approved_knowledge_from_excel,
     load_approved_knowledge_from_excel,
+    merge_approved_knowledge,
 )
+
+
+HEADERS = [
+    "ナレッジID",
+    "グループID",
+    "候補_質問",
+    "候補_回答",
+    "カテゴリ",
+    "統合件数",
+    "既存FAQ_ID",
+    "既存FAQ_質問",
+    "既存FAQ_回答",
+    "既存FAQ_比較",
+    "リスクレベル",
+    "信頼度",
+    "推奨アクション",
+    "判定根拠",
+    "レビュー結果",
+]
+
+
+def _row(
+    knowledge_id="",
+    question="",
+    answer="",
+    category="IT",
+    existing_faq_id="",
+    action="新規FAQ作成",
+    review="採用",
+):
+    return [
+        knowledge_id, 1, question, answer, category, 1,
+        existing_faq_id, "", "", "既存FAQなし/未照合",
+        "low", 0.9, action, "", review,
+    ]
 
 
 class ApprovedKnowledgeExporterTest(unittest.TestCase):
@@ -148,6 +184,88 @@ class ApprovedKnowledgeExporterTest(unittest.TestCase):
             ],
         )
         self.assertEqual(len(data), 1)
+
+
+class UpsertMergeTest(unittest.TestCase):
+    """既存FAQ_ID をキーにした upsert マージを検証。"""
+
+    def _excel(self, rows) -> Path:
+        tmp_dir = Path(tempfile.mkdtemp(prefix="upsert_test_"))
+        xlsx_path = tmp_dir / "FAQ_final_result.xlsx"
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "最終ナレッジ候補一覧"
+        ws.append(HEADERS)
+        for r in rows:
+            ws.append(r)
+        wb.save(xlsx_path)
+        return xlsx_path
+
+    def _base_file(self, dir_path: Path, items) -> Path:
+        base = dir_path / "approved_knowledge.json"
+        with base.open("w", encoding="utf-8") as f:
+            json.dump(items, f, ensure_ascii=False)
+        return base
+
+    def test_merge_function_upsert_and_append(self):
+        base = [
+            {"knowledge_id": "faq-100", "question": "旧Q", "answer": "旧A", "category": "IT"},
+            {"knowledge_id": "faq-200", "question": "別Q", "answer": "別A", "category": "IT"},
+        ]
+        incoming = [
+            {"knowledge_id": "faq-100", "question": "新Q", "answer": "新A", "category": "IT"},
+            {"knowledge_id": "k-001", "question": "新規Q", "answer": "新規A", "category": "IT"},
+        ]
+        merged = merge_approved_knowledge(base, incoming)
+        ids = [m["knowledge_id"] for m in merged]
+        # 既存faq-100は上書き、faq-200は維持、k-001は末尾追加（重複なし）
+        self.assertEqual(ids, ["faq-100", "faq-200", "k-001"])
+        self.assertEqual(merged[0]["answer"], "新A")
+        self.assertEqual(merged[1]["answer"], "別A")
+
+    def test_update_candidate_overwrites_existing_id(self):
+        # 既存FAQ_ID=faq-100 の更新候補は、自分のナレッジID(k-009)ではなくfaq-100に上書き
+        xlsx = self._excel([
+            _row(knowledge_id="k-009", question="VPN更新後の手順", answer="新手順",
+                 existing_faq_id="faq-100", action="既存FAQ更新"),
+        ])
+        out = xlsx.parent / "approved_knowledge.json"
+        self._base_file(xlsx.parent, [
+            {"knowledge_id": "faq-100", "question": "VPN手順", "answer": "旧手順", "category": "IT"},
+        ])
+        export_approved_knowledge_from_excel(xlsx, out, approved_at="2026-05-30T00:00:00+09:00")
+        data = json.loads(out.read_text(encoding="utf-8"))
+        self.assertEqual(len(data), 1)  # 重複が増えない
+        self.assertEqual(data[0]["knowledge_id"], "faq-100")
+        self.assertEqual(data[0]["answer"], "新手順")
+
+    def test_new_candidate_is_appended(self):
+        xlsx = self._excel([
+            _row(knowledge_id="k-001", question="新規Q", answer="新規A"),
+        ])
+        out = xlsx.parent / "approved_knowledge.json"
+        self._base_file(xlsx.parent, [
+            {"knowledge_id": "faq-100", "question": "既存Q", "answer": "既存A", "category": "IT"},
+        ])
+        export_approved_knowledge_from_excel(xlsx, out, approved_at="2026-05-30T00:00:00+09:00")
+        data = json.loads(out.read_text(encoding="utf-8"))
+        ids = [d["knowledge_id"] for d in data]
+        self.assertEqual(ids, ["faq-100", "k-001"])
+
+    def test_no_merge_keeps_snapshot(self):
+        xlsx = self._excel([
+            _row(knowledge_id="k-001", question="Q", answer="A"),
+        ])
+        out = xlsx.parent / "approved_knowledge.json"
+        self._base_file(xlsx.parent, [
+            {"knowledge_id": "faq-100", "question": "既存Q", "answer": "既存A", "category": "IT"},
+        ])
+        export_approved_knowledge_from_excel(
+            xlsx, out, approved_at="2026-05-30T00:00:00+09:00", merge=False
+        )
+        data = json.loads(out.read_text(encoding="utf-8"))
+        ids = [d["knowledge_id"] for d in data]
+        self.assertEqual(ids, ["k-001"])  # baseは無視して上書き
 
 
 if __name__ == "__main__":
