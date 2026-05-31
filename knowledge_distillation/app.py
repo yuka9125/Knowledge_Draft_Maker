@@ -57,12 +57,17 @@ load_dotenv(_env_path)
 
 # 承認済みKnowledgeパス（既存FAQ照合の参照元）。
 # 環境変数 APPROVED_KNOWLEDGE_PATH で上書き可（デモ用ベースラインに切替できる）。
-APPROVED_KNOWLEDGE_PATH = Path(
-    os.getenv(
-        "APPROVED_KNOWLEDGE_PATH",
-        str(BASE_DIR.parent / "data" / "approved_knowledge.json"),
-    )
-)
+# 注意: アプリは起動時に os.chdir(BASE_DIR) するため、相対パスは「リポジトリルート基準」で
+# 解決する（cwd基準だと knowledge_distillation/ 配下を見て読み込めなくなる）。
+_REPO_ROOT = BASE_DIR.parent
+_approved_env = os.getenv("APPROVED_KNOWLEDGE_PATH")
+if _approved_env:
+    _approved_path = Path(_approved_env)
+    if not _approved_path.is_absolute():
+        _approved_path = _REPO_ROOT / _approved_path
+    APPROVED_KNOWLEDGE_PATH = _approved_path
+else:
+    APPROVED_KNOWLEDGE_PATH = _REPO_ROOT / "data" / "approved_knowledge.json"
 
 
 OUTPUT_DIR = Path("data/outputs")
