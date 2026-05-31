@@ -139,6 +139,25 @@ class ApprovedKnowledgeExporterTest(unittest.TestCase):
                 "不採用",
             ]
         )
+        ws.append(
+            [
+                "",
+                "",
+                "",
+                "候補参考の回答",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "候補参考",
+            ]
+        )
         wb.save(xlsx_path)
         return xlsx_path
 
@@ -157,6 +176,36 @@ class ApprovedKnowledgeExporterTest(unittest.TestCase):
         self.assertEqual(items[0]["category"], "IT")
         self.assertEqual(items[0]["approved_status"], "approved")
         self.assertEqual(items[0]["approved_at"], "2026-05-29T10:00:00+09:00")
+
+    def test_candidate_reference_rows_are_ignored(self):
+        """候補参考行は approved_knowledge に出力しない。"""
+        xlsx_path = self._create_reviewed_excel()
+        items = load_approved_knowledge_from_excel(
+            xlsx_path,
+            approved_at="2026-05-29T10:00:00+09:00",
+        )
+
+        self.assertEqual(len(items), 1)
+        self.assertNotIn("候補参考の回答", [item["answer"] for item in items])
+
+    def test_blank_approved_rows_are_ignored(self):
+        """空ID/空質問の行が誤って採用になってもスキップする。"""
+        xlsx_path = self._create_reviewed_excel()
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "最終ナレッジ候補一覧"
+        ws.append(HEADERS)
+        ws.append(_row(knowledge_id="", question="", answer="候補だけ", review="採用"))
+        ws.append(_row(knowledge_id="k-001", question="Q", answer="A", review="採用"))
+        wb.save(xlsx_path)
+
+        items = load_approved_knowledge_from_excel(
+            xlsx_path,
+            approved_at="2026-05-29T10:00:00+09:00",
+        )
+
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]["knowledge_id"], "k-001")
 
     def test_export_approved_knowledge_json(self):
         """approved_knowledge.json の形式を検証。"""

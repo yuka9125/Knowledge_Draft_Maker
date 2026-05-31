@@ -318,6 +318,20 @@ class VerificationExcelWriter:
                     apply_cell_style(cell, fill=row_fill)
                 row_idx += 1
 
+                for candidate_key in ("answer_candidate_2", "answer_candidate_3"):
+                    candidate_answer = str(item.get(candidate_key, "")).strip()
+                    if not candidate_answer:
+                        continue
+                    for col_idx in range(1, len(headers) + 1):
+                        value = ""
+                        if headers[col_idx - 1] == "候補_回答":
+                            value = candidate_answer
+                        elif headers[col_idx - 1] == "レビュー結果":
+                            value = "候補参考"
+                        cell = ws.cell(row=row_idx, column=col_idx, value=value)
+                        apply_cell_style(cell, fill=ANSWER_CANDIDATE_SUB_FILL)
+                    row_idx += 1
+
             widths = [
                 12,
                 10,
@@ -342,7 +356,7 @@ class VerificationExcelWriter:
                 review_result_col = 15  # 1始まり
                 dv = DataValidation(
                     type="list",
-                    formula1='"未確認,採用,不採用"',
+                    formula1='"未確認,採用,不採用,候補参考"',
                     allow_blank=False,
                     showErrorMessage=True,
                     errorTitle="入力値エラー",
@@ -824,7 +838,7 @@ class VerificationExcelWriter:
         os.makedirs(self.output_dir, exist_ok=True)
         filepath = os.path.join(self.output_dir, self.get_filename())
         self.wb.save(filepath)
-        print(f"✅ 検証Excel出力: {filepath}")
+        print(f"[OK] 検証Excel出力: {filepath}")
         return filepath
 
 

@@ -79,6 +79,12 @@ def load_approved_knowledge_from_excel(
             continue
 
         knowledge_id = _required_value(ws, row_idx, headers, "ナレッジID")
+        question = _required_value(ws, row_idx, headers, "候補_質問")
+        answer = _required_value(ws, row_idx, headers, "候補_回答")
+        category = _required_value(ws, row_idx, headers, "カテゴリ")
+        if not knowledge_id or not question or not answer:
+            continue
+
         if use_existing_faq_id:
             existing_faq_id = _optional_value(
                 ws, row_idx, headers, EXISTING_FAQ_ID_HEADER
@@ -90,9 +96,9 @@ def load_approved_knowledge_from_excel(
         approved_items.append(
             {
                 "knowledge_id": knowledge_id,
-                "question": _required_value(ws, row_idx, headers, "候補_質問"),
-                "answer": _required_value(ws, row_idx, headers, "候補_回答"),
-                "category": _required_value(ws, row_idx, headers, "カテゴリ"),
+                "question": question,
+                "answer": answer,
+                "category": category,
                 "approved_status": "approved",
                 "approved_at": approved_at_value,
             }
