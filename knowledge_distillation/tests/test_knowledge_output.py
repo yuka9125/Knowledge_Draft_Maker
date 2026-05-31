@@ -74,28 +74,41 @@ class KnowledgeOutputLogicTest(unittest.TestCase):
 
     def test_p32_classification(self):
         """P3-2確認ステータスの類似度しきい値を検証。"""
+        # 回答が同一 → 完全一致（≥0.95）
         self.assertEqual(
             classify_p32_result(0.96, "同じ回答", "同じ回答"),
             "P3-2確認（既存FAQ完全一致）",
         )
+        # 回答が同一 → 類似（0.70〜0.95）
         self.assertEqual(
-            classify_p32_result(0.88, "候補回答", "既存FAQ回答"),
+            classify_p32_result(0.88, "同じ回答です", "同じ回答です"),
             "P3-2確認（既存FAQ類似）",
         )
+        # 高類似でも回答が異なれば更新候補（旧ロジックは0.85以上を一律「類似」にしていた）
+        self.assertEqual(
+            classify_p32_result(0.88, "候補回答", "既存FAQ回答"),
+            "P3-2確認（既存FAQ更新候補）",
+        )
+        # 高類似でも回答が矛盾なら矛盾可能性（Wi-Fi: 使用可能↔使用不可）
+        self.assertEqual(
+            classify_p32_result(0.90, "ゲストWi-Fiは使用可能です", "ゲストWi-Fiは使用不可です"),
+            "P3-2確認（既存FAQ矛盾可能性）",
+        )
+        # 中類似帯の矛盾
         self.assertEqual(
             classify_p32_result(0.76, "新しい手順です", "古い手順です"),
             "P3-2確認（既存FAQ矛盾可能性）",
         )
+        # 中類似帯の更新候補
         self.assertEqual(
-            classify_p32_result(0.76, "申請先が変わりました", "旧申請先です"),
+            classify_p32_result(0.76, "申請先が変わりました", "別の申請先です"),
             "P3-2確認（既存FAQ更新候補）",
         )
-        # しきい値0.70化：0.72の同テーマ更新も取りこぼさない（旧0.75では新規扱いだった）
         self.assertEqual(
             classify_p32_result(0.72, "最新版へ更新してください", "クライアントを再起動してください"),
             "P3-2確認（既存FAQ更新候補）",
         )
-        # 0.68は更新候補に達しないので新規
+        # 0.70未満は新規
         self.assertEqual(
             classify_p32_result(0.68, "最新版へ更新してください", "再起動してください"),
             "◯採用",

@@ -67,6 +67,10 @@ def has_conflict_signal(candidate_answer: str, matched_faq_answer: str) -> bool:
         ("旧システム", "新システム"),
         ("廃止", "利用"),
         ("使用不可", "使用可能"),
+        ("利用不可", "利用可能"),
+        ("利用できません", "利用できます"),
+        ("使用できません", "使用できます"),
+        ("対応していません", "対応しています"),
         ("できません", "できます"),
         ("不要", "必要"),
     ]
@@ -86,19 +90,31 @@ def classify_p32_result(
     if max_similarity is None:
         return "P3-2確認（既存FAQ更新候補）"
 
-    if max_similarity >= P32_EXACT_MATCH_THRESHOLD:
-        return "P3-2確認（既存FAQ完全一致）"
-    if max_similarity >= P32_SIMILAR_THRESHOLD:
+    # しきい値未満は「一致なし」＝新規
+    if max_similarity < P32_REVIEW_THRESHOLD:
+        return "◯採用"
+
+    # ここから先は「質問が十分近い＝一致」とみなし、**回答の関係**で判定する。
+    # （高類似度でも、回答が矛盾/更新なら見逃さない）
+    candidate = normalize_text_for_conflict(candidate_answer)
+    faq = normalize_text_for_conflict(matched_faq_answer)
+
+    # 回答がほぼ同一 → 完全一致 / 類似（維持・統合）
+    if candidate and faq and candidate == faq:
+        if max_similarity >= P32_EXACT_MATCH_THRESHOLD:
+            return "P3-2確認（既存FAQ完全一致）"
         return "P3-2確認（既存FAQ類似）"
-    if max_similarity >= P32_REVIEW_THRESHOLD:
-        if has_conflict_signal(candidate_answer, matched_faq_answer):
-            return "P3-2確認（既存FAQ矛盾可能性）"
-        candidate = normalize_text_for_conflict(candidate_answer)
-        faq = normalize_text_for_conflict(matched_faq_answer)
-        if candidate and faq and candidate != faq:
-            return "P3-2確認（既存FAQ更新候補）"
-        return "P3-2確認（既存FAQ類似）"
-    return "◯採用"
+
+    # 回答が矛盾（使用不可↔使用可能 等） → 矛盾可能性（人間レビュー必須）
+    if has_conflict_signal(candidate_answer, matched_faq_answer):
+        return "P3-2確認（既存FAQ矛盾可能性）"
+
+    # 回答が異なる → 更新候補（既存FAQ更新）
+    if candidate and faq and candidate != faq:
+        return "P3-2確認（既存FAQ更新候補）"
+
+    # 片方が空などの判断不能 → 類似扱い
+    return "P3-2確認（既存FAQ類似）"
 
 
 def build_recommended_action(final_result: str) -> str:

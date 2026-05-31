@@ -115,19 +115,6 @@ def cosine_similarity(a: np.ndarray, b: np.ndarray) -> np.ndarray:
     return np.dot(a_norm, b_norm.T)
 
 
-def _combine_question_answer(question, answer) -> str:
-    """既存FAQ照合用に質問と回答を結合する。
-
-    質問だけだと「同テーマ・別表現」の更新を取りこぼしやすいため、
-    回答本文も含めて照合する。回答が空または「-」の場合は質問のみ。
-    """
-    q = str(question or "").strip()
-    a = str(answer or "").strip()
-    if a and a != "-":
-        return f"{q} {a}"
-    return q
-
-
 def preprocess_text(text: str) -> str:
     """テキスト前処理"""
     if pd.isna(text) or not text:
@@ -681,21 +668,16 @@ class Phase32Deduplicator:
 
         # 通常データのみで処理
         if len(df_normal) > 0:
-            # Qテキスト（質問＋回答で照合：同テーマ・更新の取りこぼしを減らす）
+            # Qテキスト（質問で照合）。更新/矛盾は「回答が違う」のが本質なので、
+            # 回答を混ぜると同一質問の類似度が下がり取りこぼす。質問のみで照合する。
             q_texts = [
-                preprocess_text(
-                    _combine_question_answer(
-                        row[question_col], row.get(answer_col, "")
-                    )
-                )
+                preprocess_text(str(row[question_col]))
                 for _, row in df_normal.iterrows()
             ]
 
-            # FAQテキスト（質問＋回答）
+            # FAQテキスト（質問）
             faq_texts = [
-                preprocess_text(
-                    _combine_question_answer(row.get("質問", ""), row.get("回答", ""))
-                )
+                preprocess_text(str(row["質問"]))
                 for _, row in faq_df.iterrows()
             ]
 
@@ -1014,7 +996,7 @@ class Phase3Processor:
             for idx, group in enumerate(sorted_groups, start=1)
         }
 
-        # 同一クラスタに属する元ログidxを収集
+        # 同一クラスタに属する元ログidxを収集（source_dfに残っている代表のみ）
         cluster_members: Dict[Any, List[Any]] = {}
         for original_idx, row in source_df.iterrows():
             if str(row.get("回答", "")) == "-":
@@ -1026,6 +1008,19 @@ class Phase3Processor:
                 else original_idx
             )
             cluster_members.setdefault(cluster_key, []).append(original_idx)
+
+        # 統合件数用：P0/P2で削除された重複も含めた、最終GIDごとの元ログ総数。
+        # （source_dfには残らないが processing_records には残るため、ここで数える）
+        gid_total_counts: Dict[Any, int] = {}
+        for original_idx, record in self.processing_records.items():
+            if str(getattr(record, "answer", "") or "").strip() == "-":
+                continue
+            cluster_key = (
+                record.final_gid
+                if getattr(record, "final_gid", None) is not None
+                else original_idx
+            )
+            gid_total_counts[cluster_key] = gid_total_counts.get(cluster_key, 0) + 1
 
         # 出力用に索引化
         faq_rows_by_idx = {idx: row for idx, row in faq_only_df.iterrows()}
@@ -1077,6 +1072,13 @@ class Phase3Processor:
                 member_indices = [
                     candidate.original_idx for candidate in review_candidates
                 ]
+
+            # 統合件数：P0/P2削除の重複も含めた総数（無ければ代表数にフォールバック）
+            member_total = gid_total_counts.get(
+                group.group_id, len(member_indices)
+            )
+            if member_total < len(member_indices):
+                member_total = len(member_indices)
 
             titles_by_index: Dict[Any, str] = {}
             if "件名" in source_df.columns:
@@ -1152,7 +1154,7 @@ class Phase3Processor:
                         "answer": answer,
                         "category": category,
                         "source_logs": source_logs,
-                        "similar_logs_count": len(member_indices),
+                        "similar_logs_count": member_total,
                         "existing_faq_diff_reason": existing_faq_diff_reason,
                         "matched_faq_question": (
                             record.matched_faq_question
@@ -1173,7 +1175,7 @@ class Phase3Processor:
                         ),
                         "judgement_reason": build_judgement_reason(
                             confidence=confidence,
-                            similar_logs_count=len(member_indices),
+                            similar_logs_count=member_total,
                             faq_comparison=existing_faq_comparison,
                             answer=answer,
                             category=category,
