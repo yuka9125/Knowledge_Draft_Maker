@@ -388,7 +388,10 @@ def summarize_review_targets(records):
         if record.answer == "-":
             continue
         final_result = record.final_result or ""
-        if final_result == "P3-2確認（既存FAQ完全一致）":
+        if final_result in {
+            "P3-2確認（既存FAQ完全一致）",
+            "P3-2確認（既存FAQ類似）",
+        }:
             exact_faq_count += 1
         elif final_result == "◯採用" or final_result.startswith("P3-2確認"):
             review_target_count += 1
@@ -465,37 +468,6 @@ def display_results():
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 type="primary",
             )
-
-    col1, col2 = st.columns(2)
-
-    json_files = sorted(
-        glob.glob(os.path.join(output_dir, "deduplicated_questions_*.json")),
-        reverse=True,
-    )
-    csv_files = sorted(
-        glob.glob(os.path.join(output_dir, "deduplicated_questions_*.csv")),
-        reverse=True,
-    )
-
-    with col1:
-        if json_files:
-            with open(json_files[0], "rb") as f:
-                st.download_button(
-                    label="📄 最終ナレッジ候補（JSON形式）",
-                    data=f.read(),
-                    file_name="deduplicated_questions.json",
-                    mime="application/json",
-                )
-
-    with col2:
-        if csv_files:
-            with open(csv_files[0], "rb") as f:
-                st.download_button(
-                    label="📄 最終ナレッジ候補（CSV形式）",
-                    data=f.read(),
-                    file_name="deduplicated_questions.csv",
-                    mime="text/csv",
-                )
 
     st.divider()
 

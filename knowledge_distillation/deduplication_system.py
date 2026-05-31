@@ -970,9 +970,6 @@ class Phase3Processor:
 
         excel_path = self._export_final_excel(knowledge_candidates)
 
-        # 最終結果をJSON/CSVでも出力
-        self._export_final_results(knowledge_candidates)
-
         return final_df, self.processing_records, self.gid_tracker, excel_path
 
     def _build_knowledge_candidates(
@@ -1066,7 +1063,17 @@ class Phase3Processor:
                 and str(candidate.answer).strip() != "-"
             ][:2]
 
-            member_indices = cluster_members.get(group.group_id, [])
+            group_keys = {group.group_id}
+            for candidate in group.candidates:
+                record = self.processing_records.get(candidate.original_idx)
+                if record is not None and record.final_gid is not None:
+                    group_keys.add(record.final_gid)
+
+            member_indices: List[Any] = []
+            for key in group_keys:
+                for member_idx in cluster_members.get(key, []):
+                    if member_idx not in member_indices:
+                        member_indices.append(member_idx)
             if not member_indices:
                 # 保険: クラスタ情報が見つからない場合は採用候補のidxを使用
                 member_indices = [
@@ -1074,11 +1081,10 @@ class Phase3Processor:
                 ]
 
             # 統合件数：P0/P2削除の重複も含めた総数（無ければ代表数にフォールバック）
-            member_total = gid_total_counts.get(
-                group.group_id, len(member_indices)
+            member_total = max(
+                [gid_total_counts.get(key, 0) for key in group_keys]
+                + [len(member_indices)]
             )
-            if member_total < len(member_indices):
-                member_total = len(member_indices)
 
             titles_by_index: Dict[Any, str] = {}
             if "件名" in source_df.columns:
