@@ -70,7 +70,7 @@ def test_index_preservation():
     print("📋 Phase 0: 完全一致チェック")
     print("=" * 60)
     
-    from pre_deduplication import run_phase0
+    from knowledge_distillation.pre_deduplication import run_phase0
     
     p0_df, _, _, p0_records, gid_tracker = run_phase0(
         df=df,
@@ -148,7 +148,7 @@ def test_index_preservation():
     print("📋 Phase 2: 文字列類似度チェック")
     print("=" * 60)
     
-    from pre_deduplication import run_phase2
+    from knowledge_distillation.pre_deduplication import run_phase2
     
     p2_df, p2_records, gid_tracker = run_phase2(
         df=cleaned_df,

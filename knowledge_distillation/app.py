@@ -1004,7 +1004,10 @@ else:
                 # ===========================
                 st.write("🔄 **Phase 0**: 完全一致＆類似度チェック（問い合わせ内容）...")
 
-                from pre_deduplication import run_phase0, run_phase2
+                from knowledge_distillation.pre_deduplication import (
+                    run_phase0,
+                    run_phase2,
+                )
 
                 (
                     p0_adopted_df,
@@ -1029,7 +1032,7 @@ else:
                     f"🔄 **Phase 1**: AIクレンジング（代表{representative_count}件のみ）..."
                 )
 
-                from SNOW_Cleansing import clean_dataframe
+                from knowledge_distillation.SNOW_Cleansing import clean_dataframe
 
                 # 代表データのみクレンジング
                 cleaned_representative_df = clean_dataframe(
