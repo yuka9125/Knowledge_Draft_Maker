@@ -42,8 +42,8 @@ _env_path = (
 )
 load_dotenv(_env_path)
 
-# デフォルトFAQパス
-DEFAULT_FAQ_PATH = Path("data/default_faq/FAQ_list.csv")
+# 承認済みKnowledgeパス
+APPROVED_KNOWLEDGE_PATH = BASE_DIR.parent / "data" / "approved_knowledge.json"
 
 
 OUTPUT_DIR = Path("data/outputs")
@@ -72,10 +72,46 @@ def check_environment():
     return len(missing) == 0, missing
 
 
-# デフォルトFAQチェック
-def check_default_faq():
-    """デフォルトFAQファイルの存在確認"""
-    return DEFAULT_FAQ_PATH.exists()
+def check_approved_knowledge():
+    """承認済みKnowledgeファイルの存在確認"""
+    return APPROVED_KNOWLEDGE_PATH.exists()
+
+
+def load_approved_knowledge_as_faq_df(path=APPROVED_KNOWLEDGE_PATH):
+    """approved_knowledge.jsonをPhase 3-2比較用DataFrameへ変換する。"""
+    target = Path(path)
+    if not target.exists():
+        return None
+
+    with target.open("r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    if not isinstance(data, list):
+        raise ValueError("approved_knowledge.json は配列形式である必要があります。")
+
+    rows = []
+    for item in data:
+        if not isinstance(item, dict):
+            continue
+        if str(item.get("approved_status", "")).strip().lower() != "approved":
+            continue
+
+        question = str(item.get("question", "")).strip()
+        answer = str(item.get("answer", "")).strip()
+        if not question or not answer:
+            continue
+
+        rows.append(
+            {
+                "質問": question,
+                "回答": answer,
+                "カテゴリ": str(item.get("category", "")).strip(),
+                "knowledge_id": str(item.get("knowledge_id", "")).strip(),
+                "approved_at": str(item.get("approved_at", "")).strip(),
+            }
+        )
+
+    return pd.DataFrame(rows)
 
 
 STANDARD_COLUMN_LABELS = {
@@ -476,7 +512,7 @@ def display_approved_knowledge_exporter():
 
             approved_items = load_approved_knowledge_from_excel(reviewed_excel)
             reviewed_excel.seek(0)
-            approved_path = os.path.join("data", "approved_knowledge.json")
+            approved_path = APPROVED_KNOWLEDGE_PATH
             export_approved_knowledge_from_excel(reviewed_excel, approved_path)
 
             try:
@@ -660,120 +696,53 @@ with st.sidebar:
     st.divider()
 
     # ===========================
-    # 2. 既存FAQ
+    # 2. 承認済みKnowledge（Phase 3-2比較対象）
     # ===========================
-    st.subheader("2️⃣ 既存FAQ CSV")
+    st.subheader("2️⃣ 承認済みKnowledge（比較対象）")
 
     faq_df = None
     faq_source = None
-    faq_file = None
 
-    if check_default_faq():
-        st.success("✅ デフォルトFAQあり")
+    if check_approved_knowledge():
         try:
-            default_faq_df = read_csv_flexible(DEFAULT_FAQ_PATH)
-            st.metric("登録FAQ数", f"{len(default_faq_df)}件")
+            faq_df = load_approved_knowledge_as_faq_df()
+            if faq_df is not None and len(faq_df) > 0:
+                faq_source = f"approved_knowledge.json ({APPROVED_KNOWLEDGE_PATH})"
+                st.success("✅ 承認済みKnowledgeを比較対象として読み込みました")
+                st.metric("承認済みKnowledge数", f"{len(faq_df)}件")
 
-            with st.expander("デフォルトFAQプレビュー"):
-                st.dataframe(default_faq_df.head(3))
-        except Exception as e:
-            st.warning(f"⚠️ デフォルトFAQ読込エラー: {e}")
-
-        use_custom_faq = st.checkbox(
-            "別のFAQファイルを使用する",
-            value=False,
-            help="チェックを入れると、デフォルトFAQの代わりにカスタムFAQを使用",
-        )
-
-        if use_custom_faq:
-            faq_file = st.file_uploader(
-                "カスタムFAQ", type=["csv"], key="custom_faq"
-            )
-
-            if faq_file:
-                try:
-                    faq_df = read_csv_flexible(faq_file)
-                    is_valid, missing_cols = validate_faq_csv(faq_df)
-
-                    if is_valid:
-                        st.success(f"✅ カスタムFAQ有効（{len(faq_df)}件）")
-                        faq_source = "カスタムFAQ"
-
-                        # デフォルトFAQが存在する場合、上書き確認
-                        st.warning(
-                            f"⚠️ デフォルトFAQ（{DEFAULT_FAQ_PATH}）が既に存在します"
-                        )
-                        overwrite_faq = st.checkbox(
-                            "デフォルトFAQを上書きする",
-                            value=False,
-                            help="チェックを入れると、処理開始時にデフォルトFAQが上書きされます",
-                        )
-                        if overwrite_faq:
-                            st.session_state["overwrite_default_faq"] = True
-                            st.info(
-                                "✅ 処理開始時にデフォルトFAQを上書きします"
-                            )
-                        else:
-                            st.session_state["overwrite_default_faq"] = False
-                            st.info(
-                                "ℹ️ デフォルトFAQは上書きされません（一時ファイルとして使用）"
-                            )
-                    else:
-                        st.error(
-                            f"❌ 必須カラム不足: {', '.join(missing_cols)}"
-                        )
-                        faq_df = None
-                except Exception as e:
-                    st.error(f"❌ ファイル読込エラー: {e}")
-                    faq_df = None
+                with st.expander("承認済みKnowledgeプレビュー"):
+                    preview_cols = [
+                        col
+                        for col in [
+                            "knowledge_id",
+                            "質問",
+                            "回答",
+                            "カテゴリ",
+                            "approved_at",
+                        ]
+                        if col in faq_df.columns
+                    ]
+                    st.dataframe(faq_df[preview_cols].head(5))
             else:
-                # ファイルがアップロードされていない場合はデフォルトFAQにフォールバック
-                faq_df = read_csv_flexible(DEFAULT_FAQ_PATH)
-                faq_source = "デフォルトFAQ（フォールバック）"
-                st.info("ℹ️ カスタムFAQ未選択のため、デフォルトFAQを使用します")
-        else:
-            # デフォルトFAQを使用
-            try:
-                faq_df = read_csv_flexible(DEFAULT_FAQ_PATH)
-                faq_source = "デフォルトFAQ"
-            except Exception as e:
-                st.error(f"❌ デフォルトFAQ読込エラー: {e}")
+                st.warning(
+                    "approved_knowledge.json は存在しますが、"
+                    "approved_status=approved の有効なKnowledgeがありません。"
+                )
                 faq_df = None
+        except Exception as e:
+            st.error(f"❌ approved_knowledge.json の読込に失敗しました: {e}")
+            faq_df = None
     else:
-        # デフォルトFAQなし
-        st.info("デフォルトFAQなし（Phase 3: 既存FAQ照合をスキップ）")
-
-        faq_file = st.file_uploader(
-            "既存FAQ（オプション）",
-            type=["csv"],
-            key="faq_csv",
-            help="アップロードすると既存FAQ照合が実行されます",
+        st.info(
+            f"approved_knowledge.json がまだありません（{APPROVED_KNOWLEDGE_PATH}）。"
+            "先にレビュー済みExcelから承認済みKnowledgeを出力してください。"
         )
 
-        if faq_file:
-            try:
-                faq_df = read_csv_flexible(faq_file)
-                is_valid, missing = validate_faq_csv(faq_df)
-                if is_valid:
-                    st.success(f"✅ 有効なFAQ（{len(faq_df)}件）")
-                    faq_source = "アップロードFAQ"
-
-                    # デフォルトFAQとして保存するか確認
-                    save_as_default = st.checkbox(
-                        "デフォルトFAQとして保存する",
-                        value=True,
-                        help="チェックを入れると、次回以降もこのFAQがデフォルトとして使用されます",
-                    )
-                    st.session_state["overwrite_default_faq"] = save_as_default
-
-                    with st.expander("FAQプレビュー"):
-                        st.dataframe(faq_df.head(3))
-                else:
-                    st.error(f"❌ 必須カラム不足: {', '.join(missing)}")
-                    faq_df = None
-            except Exception as e:
-                st.error(f"❌ ファイル読込エラー: {e}")
-                faq_df = None
+    st.caption(
+        "この画面では既存FAQ CSVのアップロードは不要です。"
+        "Phase 3-2は承認済みKnowledgeだけを既存FAQとして照合します。"
+    )
 
     st.divider()
 
@@ -806,12 +775,12 @@ with st.sidebar:
         )
 
         p3_2_threshold = st.slider(
-            "Phase 3-2（既存FAQ）閾値",
+            "Phase 3-2（承認済みKnowledge）閾値",
             min_value=0.50,
             max_value=0.95,
             value=0.75,
             step=0.05,
-            help="既存FAQとの類似度がこの値以上なら確認対象としてSheet1に出力",
+            help="承認済みKnowledgeとの類似度がこの値以上なら確認対象としてSheet1に出力",
         )
 
     with st.expander("⚙️ 処理設定"):
@@ -851,7 +820,7 @@ if snow_df is None:
             """
 ### Step 1: ファイル準備
 - **問い合わせ履歴CSV**をアップロード（必須）
-- **既存FAQ**を選択（任意）
+- **承認済みKnowledge**を確認（任意）
 
 入力CSVはまず以下の標準項目へ正規化されます。
 - 問い合わせタイトル（`inquiry_title`）
@@ -862,7 +831,7 @@ if snow_df is None:
 ### Step 2: 閾値設定
 - Phase 2（文字列類似度）: デフォルト 0.75
 - Phase 3-1（Q内Embedding）: デフォルト 0.75
-- Phase 3-2（既存FAQ）: デフォルト 0.75
+- Phase 3-2（承認済みKnowledge）: デフォルト 0.75
 
 ### Step 3: 処理実行
 | Phase | 処理内容 | API |
@@ -871,7 +840,7 @@ if snow_df is None:
 | Phase 1 | AIクレンジング（**代表のみ**） | GPT-4.1 |
 | Phase 2 | 完全一致＆類似度チェック（質問） | なし |
 | Phase 3-1 | Q内Embedding重複除去 | Embedding |
-| Phase 3-2 | 既存FAQとの照合・確認対象化 | Embedding |
+| Phase 3-2 | 承認済みKnowledgeとの照合・確認対象化 | Embedding |
 
 ### Step 4: 結果ダウンロード
 - **FAQ_final_result.xlsx**: 2シート構成
@@ -897,13 +866,13 @@ if snow_df is None:
         with col2:
             st.markdown("**データ設定**")
             st.markdown(
-                f"- {'✅' if check_default_faq() else '❌'} デフォルトFAQ"
+                f"- {'✅' if check_approved_knowledge() else '❌'} 承認済みKnowledge"
             )
 
-            if check_default_faq():
-                st.success("デフォルトFAQあり")
+            if check_approved_knowledge():
+                st.success(f"承認済みKnowledgeあり: {APPROVED_KNOWLEDGE_PATH}")
             else:
-                st.warning("デフォルトFAQなし")
+                st.warning("承認済みKnowledgeなし")
 
         st.divider()
 
@@ -940,15 +909,17 @@ if snow_df is None:
         """
             )
 
-        with st.expander("Q3: デフォルトFAQはどこに配置する？"):
+        with st.expander("Q3: 比較対象のKnowledgeはどこから読み込まれる？"):
             st.markdown(
                 f"""
-            以下のパスに配置してください:
+            Phase 3-2の比較対象は、レビュー済みExcelから出力した承認済みKnowledgeです。
+
+            読み込み先:
             ```
-            {DEFAULT_FAQ_PATH}
+            {APPROVED_KNOWLEDGE_PATH}
             ```
 
-            ディレクトリが存在しない場合は作成してください。
+            画面上部の「承認済みKnowledge出力」から生成した後、この処理画面で自動的に読み込まれます。
             """
             )
 
@@ -959,9 +930,9 @@ else:
     st.info(f"📄 処理対象: {len(snow_df)}件")
 
     if faq_df is not None:
-        st.info(f"📄 既存FAQ: {faq_source} ({len(faq_df)}件)")
+        st.info(f"📄 比較対象Knowledge: {faq_source} ({len(faq_df)}件)")
     else:
-        st.warning("📄 既存FAQ: なし（Phase 3-2をスキップ）")
+        st.warning("📄 比較対象Knowledge: なし（Phase 3-2をスキップ）")
 
     with st.expander("📊 設定確認"):
         col1, col2, col3 = st.columns(3)
@@ -988,19 +959,6 @@ else:
                 original_count = len(snow_df)
                 # 既存処理へ渡す直前にのみLegacy列名へ変換
                 legacy_input_df = to_legacy_schema(snow_df)
-
-                # ===========================
-                # FAQファイルの保存（処理開始時）
-                # ===========================
-                if faq_df is not None and faq_file:
-                    if st.session_state.get("overwrite_default_faq", False):
-                        DEFAULT_FAQ_PATH.parent.mkdir(
-                            parents=True, exist_ok=True
-                        )
-                        faq_df.to_csv(
-                            DEFAULT_FAQ_PATH, index=False, encoding="utf-8-sig"
-                        )
-                        st.write(f"📁 FAQを保存: {DEFAULT_FAQ_PATH}")
 
                 # ===========================
                 # Phase 0: 完全一致＆類似度チェック（問い合わせ内容）

@@ -27,12 +27,14 @@ For a screen-recording demo, start from these synthetic files:
 
 ```text
 benchmark/demo/knowledge_distillation_start_inquiries.csv
-benchmark/demo/knowledge_distillation_start_existing_faq.csv
+data/approved_knowledge.json
 ```
 
 The inquiry starter file intentionally uses `第1対応` / `第2対応` / `最終結果`
 columns so the demo can show that multiple response-history columns are merged
 into one answer candidate.
+Phase 3-2 no longer needs an existing FAQ CSV upload. It compares candidates
+against approved Knowledge loaded from `data/approved_knowledge.json`.
 
 On Windows, launch the Streamlit UI with:
 
