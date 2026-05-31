@@ -7,6 +7,8 @@ $python = "python"
 $port = if ($env:KNOWLEDGE_DISTILLATION_PORT) { $env:KNOWLEDGE_DISTILLATION_PORT } else { "8501" }
 $env:PYTHONUTF8 = "1"
 $env:PYTHONIOENCODING = "utf-8"
+$env:STREAMLIT_SERVER_HEADLESS = "true"
+$env:BROWSER = "none"
 
 $existing = Get-CimInstance Win32_Process |
     Where-Object {
@@ -30,4 +32,4 @@ Write-Host "If Azure OpenAI variables are missing, copy .env.example to .env and
 Write-Host ""
 
 Start-Process "http://localhost:$port"
-& $python -m streamlit run knowledge_distillation/app.py --server.port $port --server.headless true
+& $python -m streamlit run knowledge_distillation/app.py --server.port $port --server.headless true --browser.gatherUsageStats false
