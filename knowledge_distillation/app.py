@@ -921,7 +921,8 @@ if snow_df is None:
 - `P2削除（類似）`: Phase 2で削除（質問の類似度が閾値以上）
 - `P3-1削除`: Phase 3-1で削除（Embedding類似度）
 - `P3-2確認（既存FAQ完全一致）`: 既存FAQとほぼ一致するためSheet1には出さない
-- `P3-2確認（既存FAQ類似/更新候補/矛盾可能性）`: ナレッジ候補として出力される
+- `P3-2確認（既存FAQ類似）`: 既存FAQへの統合候補のためSheet1には出さない
+- `P3-2確認（既存FAQ更新候補/矛盾可能性）`: ナレッジ候補として出力される
 - `FAQ対象外`: AIがナレッジ候補に適さないと判断
         """
             )
@@ -1051,13 +1052,10 @@ else:
                             "概要": original_row.get("概要", ""),
                             "対応結果": original_row.get("対応結果", ""),
                         }
-                        if (
-                            "リンク名" in original_row.index
-                            and "リンク名" not in new_row
-                        ):
-                            new_row["リンク名"] = original_row.get(
-                                "リンク名", ""
-                            )
+                        if "リンク名" in original_row.index and not str(
+                            new_row.get("リンク名", "")
+                        ).strip():
+                            new_row["リンク名"] = original_row.get("リンク名", "")
 
                         cleaned_rows.append((member_idx, new_row))
 
