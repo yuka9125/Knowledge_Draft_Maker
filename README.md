@@ -35,6 +35,9 @@ columns so the demo can show that multiple response-history columns are merged
 into one answer candidate.
 Phase 3-2 no longer needs an existing FAQ CSV upload. It compares candidates
 against approved Knowledge loaded from `data/approved_knowledge.json`.
+`benchmark/demo/knowledge_distillation_start_existing_faq.csv` remains as a
+legacy/reference starter for explaining the old FAQ shape, but it is not
+uploaded in the current UI.
 
 On Windows, launch the Streamlit UI with:
 
