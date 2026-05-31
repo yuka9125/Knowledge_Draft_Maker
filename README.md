@@ -30,6 +30,10 @@ benchmark/demo/knowledge_distillation_start_inquiries.csv
 benchmark/demo/knowledge_distillation_start_existing_faq.csv
 ```
 
+The inquiry starter file intentionally uses `第1対応` / `第2対応` / `最終結果`
+columns so the demo can show that multiple response-history columns are merged
+into one answer candidate.
+
 On Windows, launch the Streamlit UI with:
 
 ```powershell
