@@ -23,6 +23,25 @@ python -m knowledge_distillation export
 python -m knowledge_distillation.approved_knowledge_exporter FAQ_final_result.xlsx -o data/approved_knowledge.json
 ```
 
+For a screen-recording demo, start from these synthetic files:
+
+```text
+benchmark/demo/knowledge_distillation_start_inquiries.csv
+benchmark/demo/knowledge_distillation_start_existing_faq.csv
+```
+
+On Windows, launch the Streamlit UI with:
+
+```powershell
+.\open_knowledge_distillation.ps1
+```
+
+or double-click:
+
+```text
+open_knowledge_distillation.bat
+```
+
 ## Serving
 
 ```bash
