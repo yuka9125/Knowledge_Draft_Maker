@@ -10,3 +10,5 @@ tqdm>=4.66.1
 aiohttp>=3.9.3
 chardet<6
 openpyxl>=3.1.2
+azure-storage-blob>=12.19.0
+azure-identity>=1.16.0

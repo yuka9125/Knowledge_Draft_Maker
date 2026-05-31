@@ -548,6 +548,27 @@ def display_approved_knowledge_exporter():
                 f"今回採用: {len(approved_items)}件 / 統合後 合計: {total_count}件"
                 "（既存FAQ更新は上書き・新規は追加）"
             )
+
+            # Blob設定があれば serving 用にアップロード（再デプロイ不要で自動反映）
+            try:
+                from knowledge_distillation.blob_uploader import (
+                    upload_approved_knowledge_to_blob,
+                    blob_upload_configured,
+                )
+
+                if blob_upload_configured():
+                    target = upload_approved_knowledge_to_blob(approved_path)
+                    st.success(
+                        f"☁️ Blobへアップロードしました（{target}）。"
+                        "serving が自動で読み直すため、再デプロイは不要です。"
+                    )
+                else:
+                    st.caption(
+                        "（Blob未設定のためローカル出力のみ。serving反映には再デプロイ、"
+                        "または APPROVED_KNOWLEDGE_BLOB_CONTAINER / AZURE_STORAGE_CONNECTION_STRING を設定）"
+                    )
+            except Exception as e:  # noqa: BLE001
+                st.warning(f"Blobアップロードに失敗しました（ローカル出力は成功）: {e}")
             with open(approved_path, "rb") as f:
                 st.download_button(
                     label="approved_knowledge.json",

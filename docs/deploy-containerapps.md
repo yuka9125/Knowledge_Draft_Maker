@@ -123,6 +123,46 @@ For the MVP, `approved_knowledge.json` is bundled into the image. To update it:
 Future production hardening can move the approved knowledge file to Azure Blob
 Storage so knowledge updates do not require rebuilding the image.
 
+## ナレッジ更新を「再デプロイ不要」にする（Blob Storage ホットスワップ）
+
+serving は Blob を ETag で監視して**自動再読込**します。distillation の「ナレッジ出力」も
+Blob 設定があれば**自動でアップロード**します。これにより、
+
+```
+レビュー → ナレッジ出力 → Blobへアップ → serving が自動反映（再デプロイ不要）
+```
+
+### 一回だけの準備
+
+1. ストレージアカウント＋コンテナを作成
+   ```bash
+   SA=kglstorage12345          # 小文字英数字・世界で一意
+   CONTAINER=approved-knowledge
+   az storage account create -g $RG -n $SA -l $LOC --sku Standard_LRS
+   az storage container create --account-name $SA -n $CONTAINER
+   CONN=$(az storage account show-connection-string -g $RG -n $SA --query connectionString -o tsv)
+   ```
+2. 最新のナレッジを一度アップロード
+   ```bash
+   az storage blob upload --account-name $SA -c $CONTAINER \
+     -f data/approved_knowledge.json -n approved_knowledge.json --overwrite
+   ```
+3. serving（Container App）に Blob を読ませる環境変数を設定して反映（**この時だけ再デプロイ/更新**）
+   ```bash
+   az containerapp update -n $APP -g $RG --set-env-vars \
+     APPROVED_KNOWLEDGE_BLOB_CONTAINER=$CONTAINER \
+     APPROVED_KNOWLEDGE_BLOB_NAME=approved_knowledge.json \
+     AZURE_STORAGE_CONNECTION_STRING="$CONN"
+   ```
+   > 本番ではマネージドID（`AZURE_STORAGE_ACCOUNT_URL` ＋ ロール `Storage Blob Data Reader`）推奨。
+
+### 以降の運用（再デプロイ不要）
+
+- distillation を回すマシンの環境変数に同じ Blob 設定（`APPROVED_KNOWLEDGE_BLOB_CONTAINER` /
+  `AZURE_STORAGE_CONNECTION_STRING` など）を入れておく
+- レビュー済みExcelから「ナレッジ出力」を実行すると、ローカル出力＋**Blobへ自動アップロード**
+- serving は次のリクエストで ETag 変化を検知し、**自動で新ナレッジを読み込む**（再デプロイ・再ビルド不要）
+
 ## Local Docker Check
 
 Human or Codex can execute if Docker is available:
