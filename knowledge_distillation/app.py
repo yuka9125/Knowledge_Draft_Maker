@@ -30,6 +30,19 @@ from dotenv import load_dotenv
 from pathlib import Path
 from knowledge_distillation.display_labels import display_label
 
+
+def configure_console_encoding():
+    """Windowsのcp932端末でも処理ログの絵文字で落ちないようにする。"""
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            try:
+                stream.reconfigure(encoding="utf-8", errors="replace")
+            except Exception:
+                pass
+
+
+configure_console_encoding()
+
 # app.py の場所を基準にパスを解決（knowledge_distillation/ 配下に置いても動作するよう）
 BASE_DIR = Path(__file__).parent
 os.chdir(BASE_DIR)

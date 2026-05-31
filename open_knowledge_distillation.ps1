@@ -5,6 +5,8 @@ Set-Location $repoRoot
 
 $python = "python"
 $port = if ($env:KNOWLEDGE_DISTILLATION_PORT) { $env:KNOWLEDGE_DISTILLATION_PORT } else { "8501" }
+$env:PYTHONUTF8 = "1"
+$env:PYTHONIOENCODING = "utf-8"
 
 Write-Host "Starting Knowledge Distillation UI..."
 Write-Host "URL: http://localhost:$port"
