@@ -72,3 +72,6 @@ Demo scenario inputs for Before / Governance / After / no-match are in
 ```bash
 python benchmark/demo/run_demo_scenarios.py --validate-only
 ```
+
+Live-flow silent demo video recording instructions are in
+[`docs/phase-f-demo-recording.md`](docs/phase-f-demo-recording.md).
