@@ -188,11 +188,23 @@ class KnowledgeOutputLogicTest(unittest.TestCase):
         )
 
     def test_sheet1_output_filter(self):
-        """既存FAQとほぼ一致する候補はSheet1に出さない。"""
+        """既存FAQ維持・統合候補はSheet1に出さない。"""
         self.assertFalse(
             should_output_to_sheet1(
                 "P3-2確認（既存FAQ完全一致）",
                 "既存FAQとほぼ一致",
+            )
+        )
+        self.assertFalse(
+            should_output_to_sheet1(
+                "P3-2確認（既存FAQ類似）",
+                "既存FAQと内容が近い（一部差分あり）",
+            )
+        )
+        self.assertFalse(
+            should_output_to_sheet1(
+                "P3-2確認（既存FAQ類似）",
+                "既存FAQと内容が一部異なる",
             )
         )
         self.assertTrue(

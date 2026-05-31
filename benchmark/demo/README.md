@@ -10,7 +10,7 @@
 
 | ファイル | 役割 |
 |---|---|
-| `showcase_inquiries.csv` | **入力**：問い合わせ履歴13件（更新/矛盾/重複/新規/リスク/エスカレーションを網羅） |
+| `showcase_inquiries.csv` | **入力**：問い合わせ履歴18件（更新/矛盾/重複/新規/リスク/エスカレーションを網羅） |
 | `approved_knowledge.showcase_baseline.json` | **比較元（Before）**：既存FAQ7件（VPN旧手順・Wi-Fi使用不可・MFA SMS 等の“古い知識”） |
 
 ### このデータで見える「全パターン」

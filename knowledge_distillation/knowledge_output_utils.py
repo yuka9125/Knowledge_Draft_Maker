@@ -156,6 +156,8 @@ def should_output_to_sheet1(final_result: str, faq_comparison: str) -> bool:
         return False
     if final_result == "P3-2確認（既存FAQ完全一致）":
         return False
+    if final_result == "P3-2確認（既存FAQ類似）":
+        return False
     return final_result == "◯採用" or final_result.startswith("P3-2確認")
 
 
