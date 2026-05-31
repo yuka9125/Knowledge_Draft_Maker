@@ -90,6 +90,16 @@ class KnowledgeOutputLogicTest(unittest.TestCase):
             classify_p32_result(0.76, "申請先が変わりました", "旧申請先です"),
             "P3-2確認（既存FAQ更新候補）",
         )
+        # しきい値0.70化：0.72の同テーマ更新も取りこぼさない（旧0.75では新規扱いだった）
+        self.assertEqual(
+            classify_p32_result(0.72, "最新版へ更新してください", "クライアントを再起動してください"),
+            "P3-2確認（既存FAQ更新候補）",
+        )
+        # 0.68は更新候補に達しないので新規
+        self.assertEqual(
+            classify_p32_result(0.68, "最新版へ更新してください", "再起動してください"),
+            "◯採用",
+        )
 
     def test_recommended_action_and_judgement_reason(self):
         """推奨アクションと判定根拠を検証。"""
@@ -150,8 +160,13 @@ class KnowledgeOutputLogicTest(unittest.TestCase):
             build_existing_faq_comparison_label(0.76, True),
             "既存FAQと内容が一部異なる",
         )
+        # 更新候補しきい値 0.70 に合わせた境界
         self.assertEqual(
-            build_existing_faq_comparison_label(0.70, True),
+            build_existing_faq_comparison_label(0.72, True),
+            "既存FAQと内容が一部異なる",
+        )
+        self.assertEqual(
+            build_existing_faq_comparison_label(0.65, True),
             "既存FAQと内容が異なる",
         )
         self.assertEqual(

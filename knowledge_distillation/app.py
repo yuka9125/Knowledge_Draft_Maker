@@ -55,8 +55,14 @@ _env_path = (
 )
 load_dotenv(_env_path)
 
-# 承認済みKnowledgeパス
-APPROVED_KNOWLEDGE_PATH = BASE_DIR.parent / "data" / "approved_knowledge.json"
+# 承認済みKnowledgeパス（既存FAQ照合の参照元）。
+# 環境変数 APPROVED_KNOWLEDGE_PATH で上書き可（デモ用ベースラインに切替できる）。
+APPROVED_KNOWLEDGE_PATH = Path(
+    os.getenv(
+        "APPROVED_KNOWLEDGE_PATH",
+        str(BASE_DIR.parent / "data" / "approved_knowledge.json"),
+    )
+)
 
 
 OUTPUT_DIR = Path("data/outputs")
@@ -791,9 +797,9 @@ with st.sidebar:
             "Phase 3-2（承認済みKnowledge）閾値",
             min_value=0.50,
             max_value=0.95,
-            value=0.75,
+            value=0.70,
             step=0.05,
-            help="承認済みKnowledgeとの類似度がこの値以上なら確認対象としてSheet1に出力",
+            help="承認済みKnowledgeとの類似度がこの値以上なら確認対象としてSheet1に出力（質問＋回答で照合）",
         )
 
     with st.expander("⚙️ 処理設定"):

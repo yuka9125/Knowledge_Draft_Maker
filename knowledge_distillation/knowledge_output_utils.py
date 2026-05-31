@@ -10,7 +10,9 @@ from typing import Any, Dict, List
 
 P32_EXACT_MATCH_THRESHOLD = 0.95
 P32_SIMILAR_THRESHOLD = 0.85
-P32_REVIEW_THRESHOLD = 0.75
+# 更新候補のしきい値。質問＋回答での照合に合わせ、同テーマ・別表現の更新を
+# 取りこぼさないよう 0.75 → 0.70 に緩める（取りこぼし減・人間レビューで担保）。
+P32_REVIEW_THRESHOLD = 0.70
 
 
 def normalize_text_for_conflict(text: str) -> str:

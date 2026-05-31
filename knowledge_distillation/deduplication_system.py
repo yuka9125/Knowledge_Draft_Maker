@@ -115,6 +115,19 @@ def cosine_similarity(a: np.ndarray, b: np.ndarray) -> np.ndarray:
     return np.dot(a_norm, b_norm.T)
 
 
+def _combine_question_answer(question, answer) -> str:
+    """既存FAQ照合用に質問と回答を結合する。
+
+    質問だけだと「同テーマ・別表現」の更新を取りこぼしやすいため、
+    回答本文も含めて照合する。回答が空または「-」の場合は質問のみ。
+    """
+    q = str(question or "").strip()
+    a = str(answer or "").strip()
+    if a and a != "-":
+        return f"{q} {a}"
+    return q
+
+
 def preprocess_text(text: str) -> str:
     """テキスト前処理"""
     if pd.isna(text) or not text:
@@ -668,15 +681,21 @@ class Phase32Deduplicator:
 
         # 通常データのみで処理
         if len(df_normal) > 0:
-            # Qテキスト（通常データのみ）
+            # Qテキスト（質問＋回答で照合：同テーマ・更新の取りこぼしを減らす）
             q_texts = [
-                preprocess_text(str(row[question_col]))
+                preprocess_text(
+                    _combine_question_answer(
+                        row[question_col], row.get(answer_col, "")
+                    )
+                )
                 for _, row in df_normal.iterrows()
             ]
 
-            # FAQテキスト
+            # FAQテキスト（質問＋回答）
             faq_texts = [
-                preprocess_text(str(row["質問"]))
+                preprocess_text(
+                    _combine_question_answer(row.get("質問", ""), row.get("回答", ""))
+                )
                 for _, row in faq_df.iterrows()
             ]
 
@@ -856,7 +875,7 @@ class Phase3Processor:
     def __init__(
         self,
         threshold_q: float = 0.75,
-        threshold_faq: float = 0.75,
+        threshold_faq: float = 0.70,
         embedding_batch_size: int = 100,
         output_dir: str = "data/outputs",
     ):
@@ -1281,7 +1300,7 @@ def run_phase3(
     df: pd.DataFrame,
     faq_df: Optional[pd.DataFrame] = None,
     threshold_q: float = 0.75,
-    threshold_faq: float = 0.75,
+    threshold_faq: float = 0.70,
     embedding_batch_size: int = 100,
     output_dir: str = "data/outputs",
     question_col: str = "質問",
