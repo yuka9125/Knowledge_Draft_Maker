@@ -226,13 +226,6 @@ class TextDeduplicator:
             if label not in cluster_groups:
                 cluster_groups[label] = []
             cluster_groups[label].append(idx)
-        if phase_name == "P2":
-            cluster_groups = self._merge_cluster_groups_by_source_link(
-                df=df_normal,
-                cluster_groups=cluster_groups,
-                category_col=category_col,
-                link_names_col=link_names_col,
-            )
 
         # グループ作成
         self.groups = self._create_groups(
@@ -531,49 +524,6 @@ class TextDeduplicator:
             )
 
         return groups
-
-    def _merge_cluster_groups_by_source_link(
-        self,
-        df: pd.DataFrame,
-        cluster_groups: Dict[int, List[int]],
-        category_col: str,
-        link_names_col: str,
-    ) -> Dict[int, List[int]]:
-        """同じカテゴリ・同じリンク名のFAQ候補は同一ソース候補として統合する。"""
-        if category_col not in df.columns or link_names_col not in df.columns:
-            return cluster_groups
-
-        link_to_label: Dict[Tuple[str, str], int] = {}
-        label_rewrites: Dict[int, int] = {}
-
-        for label, indices in cluster_groups.items():
-            target_label = label
-            for idx in indices:
-                row = df.loc[idx]
-                category = self._preprocess_text(str(row.get(category_col, "")))
-                link_name = self._preprocess_text(str(row.get(link_names_col, "")))
-                if not category or not link_name:
-                    continue
-                key = (category, link_name)
-                if key in link_to_label:
-                    target_label = link_to_label[key]
-                    break
-                link_to_label[key] = target_label
-
-            label_rewrites[label] = target_label
-            for idx in indices:
-                row = df.loc[idx]
-                category = self._preprocess_text(str(row.get(category_col, "")))
-                link_name = self._preprocess_text(str(row.get(link_names_col, "")))
-                if category and link_name:
-                    link_to_label[(category, link_name)] = target_label
-
-        merged_groups: Dict[int, List[int]] = {}
-        for label, indices in cluster_groups.items():
-            target_label = label_rewrites.get(label, label)
-            merged_groups.setdefault(target_label, []).extend(indices)
-
-        return merged_groups
 
     def _determine_final_result(
         self,

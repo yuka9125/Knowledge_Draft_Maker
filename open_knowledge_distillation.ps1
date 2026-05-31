@@ -8,6 +8,16 @@ $port = if ($env:KNOWLEDGE_DISTILLATION_PORT) { $env:KNOWLEDGE_DISTILLATION_PORT
 $env:PYTHONUTF8 = "1"
 $env:PYTHONIOENCODING = "utf-8"
 
+$existing = Get-CimInstance Win32_Process |
+    Where-Object {
+        $_.CommandLine -match "streamlit run knowledge_distillation/app.py" -and
+        $_.CommandLine -match "--server.port\s+$port"
+    }
+foreach ($process in $existing) {
+    Write-Host "Stopping existing Streamlit process on port $port (PID: $($process.ProcessId))"
+    Stop-Process -Id $process.ProcessId -Force
+}
+
 Write-Host "Starting Knowledge Distillation UI..."
 Write-Host "URL: http://localhost:$port"
 Write-Host ""
