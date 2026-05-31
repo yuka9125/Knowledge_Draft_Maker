@@ -114,6 +114,72 @@ python benchmark/conflict/evaluate_conflicts.py
 It prints precision, recall, and F1. The dataset is synthetic, so these numbers
 must be described as synthetic benchmark results.
 
+Latest local result recorded on 2026-05-31 JST:
+
+```text
+total=12 tp=3 fp=0 tn=9 fn=0
+precision=1.0000 recall=1.0000 f1=1.0000
+```
+
+## Demo Scenario Inputs
+
+Phase F demo inputs are fixed in:
+
+```text
+benchmark/demo/phase_f_demo_scenarios.json
+```
+
+The file is explicitly marked as synthetic data and contains four scenes:
+
+- `before`: old approved VPN knowledge returns the old restart answer.
+- `governance`: synthetic inquiry log becomes a P3-2 existing FAQ update
+  candidate and is approved as an existing FAQ update.
+- `after`: updated approved VPN knowledge returns the latest-client answer.
+- `no_match`: an unapproved question returns `answerable=false` and
+  `fallback=human_review`.
+
+The API fixtures are:
+
+```text
+benchmark/demo/approved_knowledge_before.json
+benchmark/demo/approved_knowledge_after.json
+```
+
+Validate the scenario structure without starting the API:
+
+```bash
+python benchmark/demo/run_demo_scenarios.py --validate-only
+```
+
+Run the Before scene locally:
+
+```bash
+APPROVED_KNOWLEDGE_PATH=benchmark/demo/approved_knowledge_before.json \
+python -m uvicorn serving.governed_knowledge_api:app --port 8000
+
+python benchmark/demo/run_demo_scenarios.py \
+  --base-url http://127.0.0.1:8000 \
+  --expected-state before
+```
+
+Run the After and no-match scenes locally:
+
+```bash
+APPROVED_KNOWLEDGE_PATH=benchmark/demo/approved_knowledge_after.json \
+python -m uvicorn serving.governed_knowledge_api:app --port 8000
+
+python benchmark/demo/run_demo_scenarios.py \
+  --base-url http://127.0.0.1:8000 \
+  --expected-state after
+```
+
+On PowerShell, set the fixture path before starting Uvicorn:
+
+```powershell
+$env:APPROVED_KNOWLEDGE_PATH = "benchmark/demo/approved_knowledge_after.json"
+python -m uvicorn serving.governed_knowledge_api:app --port 8000
+```
+
 ## approved_knowledge Update Policy
 
 Default policy: merge by upsert.

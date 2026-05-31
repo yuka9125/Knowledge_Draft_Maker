@@ -65,3 +65,10 @@ in [`docs/phase-f-prep.md`](docs/phase-f-prep.md).
 ```bash
 python benchmark/conflict/evaluate_conflicts.py
 ```
+
+Demo scenario inputs for Before / Governance / After / no-match are in
+`benchmark/demo/phase_f_demo_scenarios.json`.
+
+```bash
+python benchmark/demo/run_demo_scenarios.py --validate-only
+```
