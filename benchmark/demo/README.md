@@ -1,53 +1,78 @@
 # デモ用データ（knowledge_distillation を実際に回す）
 
-ガバナンス判定（既存FAQ更新候補・矛盾可能性）が**狙って発火する**よう用意した合成データです。
-実顧客データではありません。
+ガバナンス判定が**全パターン一度に見える**よう用意した合成データです。実顧客データではありません。
 
-## ファイル
+---
+
+## ★ おすすめ：全パターン showcase
+
+「すごさ・よさ」を一度で見せるための包括データセットです。
 
 | ファイル | 役割 |
 |---|---|
-| `knowledge_distillation_start_inquiries.csv` | **入力**：問い合わせ履歴（10件）。VPN/ゲストWi-Fi/経費/パスワード等の最新対応 |
-| `knowledge_distillation_start_existing_faq.csv` | 旧FAQ（参考・CSV版） |
-| `approved_knowledge.demo_baseline.json` | **比較元（Before）**：旧FAQ5件を approved_knowledge.json 形式にしたもの（`demo-*` ID・旧回答） |
+| `showcase_inquiries.csv` | **入力**：問い合わせ履歴13件（更新/矛盾/重複/新規/リスク/エスカレーションを網羅） |
+| `approved_knowledge.showcase_baseline.json` | **比較元（Before）**：既存FAQ7件（VPN旧手順・Wi-Fi使用不可・MFA SMS 等の“古い知識”） |
 
-> ポイント：入力ログは**新手順**、比較元は**旧FAQ**。差があるから「更新候補／矛盾可能性」が出ます。
-> 例）VPN: 旧「再起動」→ 新「最新版へ更新」＝更新候補／ゲストWi-Fi: 旧「使用不可」→ 新「利用可」＝矛盾可能性。
+### このデータで見える「全パターン」
 
-## 実行手順（Streamlit UI で実際に回す）
+| # | 入力（件名） | 既存FAQ | 期待される判定 | 何が嬉しいか（価値） |
+|---|---|---|---|---|
+| 1,2 | VPN接続不可×2（旧手順で復旧せず／再起動でも改善せず） | demo-vpn-001「再起動」 | **重複統合**(P3-1)→**既存FAQ更新候補** | 似た問い合わせを1件に集約し、**古い手順の更新**を検知 |
+| 3 | ゲストWi-Fiの利用可否 | demo-wifi-001「使用不可」 | **既存FAQ矛盾可能性**→人間レビュー必須 | 「不可→可」の**矛盾を自動検知**し、誤回答を未然に防ぐ |
+| 4 | MFAの設定方法（運用変更後） | demo-mfa-001「SMS」 | **既存FAQ更新候補** | SMS→認証アプリの**運用変更**を反映 |
+| 5 | 共有フォルダにアクセスできない | demo-share-001「FS01」 | **既存FAQ更新候補** | サーバ移行(FS01→FS02)の**陳腐化**を検知 |
+| 6 | パスワード再設定の手順 | demo-password-001 | **既存FAQ完全一致/類似**→維持/統合 | 既出は**重複作成しない** |
+| 7 | 経費精算のやり方 | demo-expense-001 | **既存FAQ類似**→統合 | 言い回し違いを**1つに束ねる** |
+| 8,9 | 会議室予約／在宅勤務申請 | （なし） | **新規FAQ作成** | 本当に新しい知識だけ**新規追加** |
+| 10 | 管理者権限の付与依頼 | （なし） | 新規＋**リスク critical** | 権限系を**自動でリスク選別**しレビューへ |
+| 11 | 退職者の個人情報削除 | （なし） | 新規＋**リスク high** | 個人情報系を**慎重に扱う** |
+| 12,13 | 経費の締め日／食堂の営業時間 | （部分的） | **エスカレーション**（部門/最新案内へ） | 変動情報は**推測せず確認を案内**（誠実さ） |
 
-1. **比較元を Before に向ける**（稼働中の `data/approved_knowledge.json` は触らない）
-   - ⚠️ アプリは起動時に作業ディレクトリを `knowledge_distillation/` に変更するため、
-     **APPROVED_KNOWLEDGE_PATH は必ず「絶対パス」**で指定してください（相対パスは効きません）。
+> つまり一回の実行で「**更新・矛盾・重複・新規・リスク・推測しない**」の6つの価値が全部出ます。
+
+### 実行手順
+
+1. **比較元を showcase の Before に向ける**（絶対パス必須：app は起動時に `os.chdir` するため）
    ```bat
-   set APPROVED_KNOWLEDGE_PATH=C:\Users\yukai\Desktop\Knowledge_Governance_Layer\Knowledge_Governance_Layer-git\benchmark\demo\approved_knowledge.demo_baseline.json
+   set APPROVED_KNOWLEDGE_PATH=C:\Users\yukai\Desktop\Knowledge_Governance_Layer\Knowledge_Governance_Layer-git\benchmark\demo\approved_knowledge.showcase_baseline.json
    ```
-   （PowerShell: `$env:APPROVED_KNOWLEDGE_PATH="C:\Users\yukai\Desktop\Knowledge_Governance_Layer\Knowledge_Governance_Layer-git\benchmark\demo\approved_knowledge.demo_baseline.json"`）
+   （PowerShell: `$env:APPROVED_KNOWLEDGE_PATH="...\approved_knowledge.showcase_baseline.json"`）
 
-2. **アプリ起動**
-   ```bat
-   open_knowledge_distillation.bat
-   ```
-   （または `python -m streamlit run knowledge_distillation/app.py`）
+2. **アプリ起動**：`open_knowledge_distillation.bat`（または `python -m streamlit run knowledge_distillation/app.py`）
 
-3. **問い合わせ履歴CSVをアップロード**
-   - 「1️⃣ 問い合わせ履歴CSV」に `knowledge_distillation_start_inquiries.csv`
+3. 「1️⃣ 問い合わせ履歴CSV」に **`showcase_inquiries.csv`**
 
-4. **比較対象を確認**
-   - 「2️⃣ 承認済みKnowledge（比較対象）」に上記ベースラインの**5件**が読み込まれていることを確認
-   - （しきい値スライダー「Phase 3-2」は既定 **0.70**）
+4. 「2️⃣ 承認済みKnowledge」に**7件**読み込まれることを確認（Phase 3-2 しきい値＝既定 **0.70**）
 
-5. **実行 → 結果Excelを確認**
-   - Sheet1「最終ナレッジ候補一覧」で、VPN系が **推奨アクション=既存FAQ更新（既存FAQ更新候補）**、
-     ゲストWi-Fiが **矛盾可能性**、`既存FAQ_ID` に `demo-vpn-001` 等が入ることを確認
+5. 実行 → Sheet1「最終ナレッジ候補一覧」で、上表の判定（更新候補/矛盾可能性/類似/新規）と
+   `既存FAQ_ID`・推奨アクション・リスクレベルを確認
 
-6. **レビューで「採用」→ approved_knowledge 出力**
-   - upsert マージで `既存FAQ_ID` を持つ更新候補は**旧FAQを上書き**、新規は追加（重複なし）
+6. 「採用」に設定 → 出力で **upsert マージ**（更新は既存IDを上書き・新規は追加）
+
+---
+
+## 価値ナラティブ（記事・デモの語り）
+
+- **問題**：FAQは放置すると古くなる。古いVPN手順、使えないはずのWi-Fi、SMSのままのMFA…
+  そのまま回答エージェントに載せると、ユーザーに**間違った回答**を返してしまう。
+- **この仕組み**：問い合わせログから候補を生成し、**既存の承認済みナレッジと自動照合**して
+  - 古ければ「**更新候補**」、食い違えば「**矛盾可能性**」、似ていれば「**統合**」、新しければ「**新規**」
+  - 権限・個人情報は「**リスク**」として人間レビューへ
+  - 変動情報は「**推測せず確認を案内**」
+- **結果**：人間が承認した**正しい知識だけ**が serving（回答エージェント）に渡る。
+  ＝**Knowledge Governance Layer** が、AI回答の品質と信頼を担保する。
+
+---
 
 ## 注意
 
-- 既存FAQ照合は **質問＋回答** を結合した埋め込み類似度で行います（しきい値 0.70）。
-- 類似度の実数は **Azure 埋め込み（text-embedding-3-large）** での実行で確定します。
-  狙い通り発火しない場合は、Before の文言をログに寄せる／しきい値を微調整してください。
+- 既存FAQ照合は **質問＋回答** を結合した埋め込み類似度（しきい値 0.70）。
+- 矛盾検知は決定的（使用不可↔使用可能 等の対語）。類似度の実数は **Azure 埋め込み実行**で確定するため、
+  更新候補/類似の境界は環境で多少ぶれます。狙い通り出ない項目があれば、Before の文言や
+  しきい値を微調整してください。
 - Codex の台本式デモ（`prepare_live_demo.py` / `approved_knowledge_before.json` / `_after.json`）は
-  VPN中心の事前生成Excelデモで、本READMEの「実際に回す」手順とは別物です。
+  VPN中心の事前生成Excelデモで、本「実際に回す」手順とは別物です。
+
+## （参考）最小デモ
+- `knowledge_distillation_start_inquiries.csv` ＋ `approved_knowledge.demo_baseline.json`（5件）。
+  まずは小さく試したいとき用。
