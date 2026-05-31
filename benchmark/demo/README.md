@@ -1,43 +1,53 @@
-# デモ用ベースライン（Before/After）
+# デモ用データ（knowledge_distillation を実際に回す）
 
-ガバナンス判定（既存FAQ更新候補・矛盾可能性）が**狙って発火する**ように用意した、
-**合成の「Before」承認済みナレッジ**です。実顧客データではありません。
+ガバナンス判定（既存FAQ更新候補・矛盾可能性）が**狙って発火する**よう用意した合成データです。
+実顧客データではありません。
 
-- `approved_knowledge.before.json` … デモ開始時点の**旧FAQ**（VPN再起動・ゲストWi-Fi利用不可・パスワード電話依頼・プリンタWi-Fi確認・経費は紙申請）
+## ファイル
 
-## なぜ必要か
+| ファイル | 役割 |
+|---|---|
+| `knowledge_distillation_start_inquiries.csv` | **入力**：問い合わせ履歴（10件）。VPN/ゲストWi-Fi/経費/パスワード等の最新対応 |
+| `knowledge_distillation_start_existing_faq.csv` | 旧FAQ（参考・CSV版） |
+| `approved_knowledge.demo_baseline.json` | **比較元（Before）**：旧FAQ5件を approved_knowledge.json 形式にしたもの（`demo-*` ID・旧回答） |
 
-既存FAQ照合（Phase 3-2）は、**approved_knowledge.json（＝今の承認済みナレッジ）**を
-比較元にします。比較元に「旧FAQ」が入っていないと、新しい問い合わせログは
-すべて「新規FAQ作成」になり、**更新候補/矛盾の検知が発火しません**。
-この Before を比較元に据えると、ログ（最新の手順）と旧FAQが食い違うため、
-`既存FAQ更新候補` / `既存FAQ矛盾可能性` が出ます。
+> ポイント：入力ログは**新手順**、比較元は**旧FAQ**。差があるから「更新候補／矛盾可能性」が出ます。
+> 例）VPN: 旧「再起動」→ 新「最新版へ更新」＝更新候補／ゲストWi-Fi: 旧「使用不可」→ 新「利用可」＝矛盾可能性。
 
-## デモ手順（Before → After）
+## 実行手順（Streamlit UI で実際に回す）
 
-1. **Before を比較元に設定**（稼働中の `data/approved_knowledge.json` は触らずに切替）
-   ```bash
-   # 環境変数で比較元を Before に向ける（distillation 実行時）
-   set APPROVED_KNOWLEDGE_PATH=benchmark/demo/approved_knowledge.before.json   # Windows
-   # export APPROVED_KNOWLEDGE_PATH=benchmark/demo/approved_knowledge.before.json  # macOS/Linux
+1. **比較元を Before に向ける**（稼働中の `data/approved_knowledge.json` は触らない）
+   - ⚠️ アプリは起動時に作業ディレクトリを `knowledge_distillation/` に変更するため、
+     **APPROVED_KNOWLEDGE_PATH は必ず「絶対パス」**で指定してください（相対パスは効きません）。
+   ```bat
+   set APPROVED_KNOWLEDGE_PATH=C:\Users\yukai\Desktop\Knowledge_Governance_Layer\Knowledge_Governance_Layer-git\benchmark\demo\approved_knowledge.demo_baseline.json
    ```
-   ※ もしくはこのファイルを `data/approved_knowledge.json` にコピーする。
+   （PowerShell: `$env:APPROVED_KNOWLEDGE_PATH="C:\Users\yukai\Desktop\Knowledge_Governance_Layer\Knowledge_Governance_Layer-git\benchmark\demo\approved_knowledge.demo_baseline.json"`）
 
-2. **distillation を実行**（問い合わせログを投入）
-   - VPN/ゲストWi-Fi/パスワード/プリンタ/経費の候補が、旧FAQと照合され
-     `既存FAQ更新候補`（推奨アクション=既存FAQ更新）や
-     `既存FAQ矛盾可能性`（ゲストWi-Fi: 利用不可→利用可）として出る
+2. **アプリ起動**
+   ```bat
+   open_knowledge_distillation.bat
+   ```
+   （または `python -m streamlit run knowledge_distillation/app.py`）
 
-3. **レビューで「採用」→ approved_knowledge を出力**
-   - upsert マージにより、`既存FAQ_ID` を持つ更新候補は**旧FAQを上書き**、新規は追加
+3. **問い合わせ履歴CSVをアップロード**
+   - 「1️⃣ 問い合わせ履歴CSV」に `knowledge_distillation_start_inquiries.csv`
 
-4. **After を serving で確認**
-   - 出力された approved_knowledge.json を `data/approved_knowledge.json` に置き、
-     serving を起動 → 旧手順だった質問が**最新の回答**で返る
+4. **比較対象を確認**
+   - 「2️⃣ 承認済みKnowledge（比較対象）」に上記ベースラインの**5件**が読み込まれていることを確認
+   - （しきい値スライダー「Phase 3-2」は既定 **0.70**）
 
-## 補足（しきい値・照合方式）
+5. **実行 → 結果Excelを確認**
+   - Sheet1「最終ナレッジ候補一覧」で、VPN系が **推奨アクション=既存FAQ更新（既存FAQ更新候補）**、
+     ゲストWi-Fiが **矛盾可能性**、`既存FAQ_ID` に `demo-vpn-001` 等が入ることを確認
 
-- 既存FAQ照合は **質問＋回答** を結合して埋め込み類似度で照合します
-- 更新候補のしきい値は **0.70**（同テーマ・別表現の取りこぼしを減らすため）
-- 最終的な類似度の実数は **Azure 埋め込みでの実行**で決まります。狙いどおり発火しない
-  場合は、Before の文言をログに寄せる／しきい値を微調整してください
+6. **レビューで「採用」→ approved_knowledge 出力**
+   - upsert マージで `既存FAQ_ID` を持つ更新候補は**旧FAQを上書き**、新規は追加（重複なし）
+
+## 注意
+
+- 既存FAQ照合は **質問＋回答** を結合した埋め込み類似度で行います（しきい値 0.70）。
+- 類似度の実数は **Azure 埋め込み（text-embedding-3-large）** での実行で確定します。
+  狙い通り発火しない場合は、Before の文言をログに寄せる／しきい値を微調整してください。
+- Codex の台本式デモ（`prepare_live_demo.py` / `approved_knowledge_before.json` / `_after.json`）は
+  VPN中心の事前生成Excelデモで、本READMEの「実際に回す」手順とは別物です。
