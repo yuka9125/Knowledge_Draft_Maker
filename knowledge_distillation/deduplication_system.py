@@ -1006,9 +1006,11 @@ class Phase3Processor:
             )
             cluster_members.setdefault(cluster_key, []).append(original_idx)
 
-        # 統合件数用：P0/P2で削除された重複も含めた、最終GIDごとの元ログ総数。
+        # 統合件数・候補参考行用：P0/P2/P3-1で削除された重複も含めた
+        # 最終GIDごとの元ログidx一覧。削除側はsource_dfに残らないためrecordsから復元する。
         # （source_dfには残らないが processing_records には残るため、ここで数える）
         gid_total_counts: Dict[Any, int] = {}
+        gid_record_indices: Dict[Any, List[Any]] = {}
         for original_idx, record in self.processing_records.items():
             if str(getattr(record, "answer", "") or "").strip() == "-":
                 continue
@@ -1018,6 +1020,7 @@ class Phase3Processor:
                 else original_idx
             )
             gid_total_counts[cluster_key] = gid_total_counts.get(cluster_key, 0) + 1
+            gid_record_indices.setdefault(cluster_key, []).append(original_idx)
 
         # 出力用に索引化
         faq_rows_by_idx = {idx: row for idx, row in faq_only_df.iterrows()}
@@ -1053,16 +1056,6 @@ class Phase3Processor:
             if not review_candidates:
                 continue
 
-            # 既存仕様に合わせて「回答候補1〜3」を保持（Excel表示用）
-            # 候補1: 採用回答、候補2/3: 不採用候補の回答
-            other_answers = [
-                str(candidate.answer)
-                for candidate in sorted(group.candidates, key=lambda c: c.rank)
-                if (not candidate.is_adopted)
-                and str(candidate.answer).strip()
-                and str(candidate.answer).strip() != "-"
-            ][:2]
-
             group_keys = {group.group_id}
             for candidate in group.candidates:
                 record = self.processing_records.get(candidate.original_idx)
@@ -1071,20 +1064,59 @@ class Phase3Processor:
 
             member_indices: List[Any] = []
             for key in group_keys:
-                for member_idx in cluster_members.get(key, []):
+                for member_idx in gid_record_indices.get(key, []):
                     if member_idx not in member_indices:
                         member_indices.append(member_idx)
             if not member_indices:
-                # 保険: クラスタ情報が見つからない場合は採用候補のidxを使用
+                # 保険: records側にクラスタ情報が見つからない場合はsource_df側を使う
+                for key in group_keys:
+                    for member_idx in cluster_members.get(key, []):
+                        if member_idx not in member_indices:
+                            member_indices.append(member_idx)
+            if not member_indices:
+                # 最終保険: 採用候補のidxを使用
                 member_indices = [
                     candidate.original_idx for candidate in review_candidates
                 ]
 
             # 統合件数：P0/P2削除の重複も含めた総数（無ければ代表数にフォールバック）
-            member_total = max(
-                [gid_total_counts.get(key, 0) for key in group_keys]
-                + [len(member_indices)]
-            )
+            member_total = len(member_indices)
+
+            # 既存仕様に合わせて「回答候補1〜3」を保持（Excel表示用）
+            # 候補1: 採用回答、候補2/3: P0/P2/P3-1で統合された削除側の回答。
+            review_candidate_indices = {
+                candidate.original_idx for candidate in review_candidates
+            }
+            main_answers = {
+                str(candidate.answer).strip()
+                for candidate in review_candidates
+                if str(candidate.answer).strip()
+            }
+            other_answers: List[str] = []
+            duplicate_results = ("P0削除", "P2削除", "P3-1削除")
+            for member_idx in sorted(
+                member_indices,
+                key=lambda idx: (
+                    -len(str(getattr(self.processing_records.get(idx), "answer", "") or "")),
+                    idx,
+                ),
+            ):
+                if member_idx in review_candidate_indices:
+                    continue
+                member_record = self.processing_records.get(member_idx)
+                if member_record is None:
+                    continue
+                if not str(member_record.final_result or "").startswith(
+                    duplicate_results
+                ):
+                    continue
+                answer_text = str(member_record.answer or "").strip()
+                if not answer_text or answer_text == "-" or answer_text in main_answers:
+                    continue
+                if answer_text not in other_answers:
+                    other_answers.append(answer_text)
+                if len(other_answers) >= 2:
+                    break
 
             titles_by_index: Dict[Any, str] = {}
             if "件名" in source_df.columns:
@@ -1092,6 +1124,11 @@ class Phase3Processor:
                     if member_idx in source_df.index:
                         titles_by_index[member_idx] = str(
                             source_df.at[member_idx, "件名"]
+                        )
+                    elif member_idx in self.processing_records:
+                        record = self.processing_records[member_idx]
+                        titles_by_index[member_idx] = (
+                            str(record.raw_overview or record.question or "").strip()
                         )
             source_logs = build_source_logs(titles_by_index, member_indices)
 

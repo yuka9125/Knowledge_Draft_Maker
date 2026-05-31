@@ -46,6 +46,7 @@ class Phase3OutputTest(unittest.TestCase):
                 final_result="P2削除（類似）",
                 question="VPNにつながらない場合は？",
                 answer="VPNクライアントを更新してください。",
+                raw_overview="VPNにつながらない",
             ),
         }
         processor.final_groups = [
@@ -70,6 +71,11 @@ class Phase3OutputTest(unittest.TestCase):
 
         self.assertEqual(len(candidates), 1)
         self.assertEqual(candidates[0]["similar_logs_count"], 2)
+        self.assertEqual(
+            candidates[0]["answer_candidate_2"],
+            "VPNクライアントを更新してください。",
+        )
+        self.assertEqual(candidates[0]["source_logs"][1], "VPNにつながらない")
 
 
 if __name__ == "__main__":
