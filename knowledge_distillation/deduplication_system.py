@@ -483,7 +483,7 @@ class Phase31Deduplicator:
                     member_p0_gid = self.processing_records[
                         cdata["original_idx"]
                     ].p0_gid
-                    if member_p0_gid and member_p0_gid != group_id:
+                    if member_p0_gid is not None and member_p0_gid != group_id:
                         self.gid_tracker.merge(member_p0_gid, group_id)
 
             representative_pos = candidates_data[0]["pos"]
